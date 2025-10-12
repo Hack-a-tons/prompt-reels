@@ -9,6 +9,8 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 /**
  * Extract frames from video at regular intervals
+ * Legacy method - used by /api/analyze endpoint
+ * New scene detection uses detectScenes + extractSceneFrames instead
  */
 const extractFrames = (videoPath, outputDir) => {
   return new Promise((resolve, reject) => {
@@ -16,9 +18,6 @@ const extractFrames = (videoPath, outputDir) => {
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
-
-    const frames = [];
-    const fps = 1 / config.sceneDurationSeconds; // 1 frame every N seconds
 
     ffmpeg(videoPath)
       .on('end', () => {
@@ -35,7 +34,7 @@ const extractFrames = (videoPath, outputDir) => {
         reject(err);
       })
       .screenshots({
-        count: config.framesPerScene,
+        count: 1, // Extract 1 frame per scene interval
         folder: outputDir,
         filename: 'frame-%04d.jpg',
         size: '1280x720',

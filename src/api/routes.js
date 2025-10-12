@@ -8,6 +8,7 @@ const { describeImage, describeScene } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
+const { fetchNewsArticle } = require('../core/newsFetcher');
 
 const router = express.Router();
 
@@ -727,6 +728,87 @@ router.get('/scenes/:videoId/json', (req, res) => {
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
     res.json(sceneData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/fetch-news
+ * Fetch news article with video using Tavily and BrowserBase
+ */
+router.post('/fetch-news', async (req, res) => {
+  try {
+    const { query = 'latest news video', maxResults = 5 } = req.body;
+    
+    console.log(`\n📰 News fetch request: "${query}"`);
+    
+    const articleData = await fetchNewsArticle(query, maxResults);
+    
+    res.json({
+      success: true,
+      article: articleData,
+    });
+  } catch (error) {
+    console.error('News fetch error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      details: 'Failed to fetch news article with video'
+    });
+  }
+});
+
+/**
+ * GET /api/articles
+ * List all fetched articles
+ */
+router.get('/articles', (req, res) => {
+  try {
+    const articlesDir = path.join(config.outputDir, 'articles');
+    
+    if (!fs.existsSync(articlesDir)) {
+      return res.json({ articles: [] });
+    }
+
+    const files = fs.readdirSync(articlesDir)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filePath = path.join(articlesDir, f);
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        return {
+          articleId: data.articleId,
+          title: data.title,
+          source: data.source.domain,
+          url: data.source.url,
+          videoType: data.video.type,
+          hasLocalVideo: !!data.video.localPath,
+          fetchedAt: data.fetchedAt,
+        };
+      })
+      .sort((a, b) => new Date(b.fetchedAt) - new Date(a.fetchedAt));
+
+    res.json({ articles: files, count: files.length });
+  } catch (error) {
+    console.error('List articles error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/articles/:articleId
+ * Get specific article data
+ */
+router.get('/articles/:articleId', (req, res) => {
+  try {
+    const { articleId } = req.params;
+    const articlePath = path.join(config.outputDir, 'articles', `${articleId}.json`);
+    
+    if (!fs.existsSync(articlePath)) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+
+    const articleData = JSON.parse(fs.readFileSync(articlePath, 'utf8'));
+    res.json(articleData);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

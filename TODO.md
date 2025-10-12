@@ -2,9 +2,9 @@
 
 ## Project Status: FEATURE COMPLETE ✅
 
-A self-improving video analysis system with **scene detection**, **AI-powered descriptions**, and **federated prompt optimization (FPO)** with genetic evolution. Fully deployed on production.
+A self-improving video analysis system with **scene detection**, **AI-powered descriptions**, **news article fetching**, and **federated prompt optimization (FPO)** with genetic evolution. Fully deployed on production.
 
-**Last Updated**: October 12, 2025  
+**Last Updated**: January 12, 2025  
 **Repository**: `git@github.com:Hack-a-tons/prompt-reels.git`  
 **Production**: https://api.reels.hurated.com  
 **Port**: 15000
@@ -21,7 +21,8 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] W&B Weave integration for experiment tracking
 - [x] Azure OpenAI + Gemini dual-provider support
 - [x] Comprehensive test suite (`./test.sh`)
-- [x] 13+ bash scripts for automation
+- [x] 14+ bash scripts for automation
+- [x] Cleaned up .env configuration (removed unused keys)
 
 ### Video Processing & Scene Detection
 - [x] **Video upload** - multer-based with 200MB limit
@@ -32,14 +33,24 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Scene JSON API** - Structured data for programmatic access
 - [x] **Static file serving** - Videos and frames accessible via URL
 
+### News Article Fetching ✨ NEW
+- [x] **Tavily integration** - Search for news articles with videos
+- [x] **BrowserBase integration** - Extract video URLs from articles
+- [x] **Automatic video download** - Direct video downloads to `uploads/articles/`
+- [x] **Rich metadata** - Article title, text, source, timestamps
+- [x] **Article listing API** - GET `/api/articles` and `/api/articles/:id`
+- [x] **fetch-news.sh** - CLI script for fetching articles
+- [x] **list.sh articles** - List fetched articles with metadata
+
 ### Scripts & Automation
 - [x] `upload.sh` - Upload videos to API
-- [x] `list.sh` - List uploaded videos with scene status
+- [x] `list.sh` - List uploaded videos OR articles (with targets)
 - [x] `detect-scenes.sh` - Fast scene timestamp detection
 - [x] `describe-scenes.sh` - Extract frames + AI descriptions
 - [x] `detected.sh` - Show scene detection status
+- [x] `fetch-news.sh` - **NEW:** Fetch news articles with videos
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
-- [x] `cleanup.sh` - Clean output and upload directories
+- [x] `cleanup.sh` - **UPDATED:** Clean with targets (all/articles/output/uploads/prompts)
 - [x] `evolve.sh` - Manage FPO evolution (start/stop/status)
 - [x] `show-prompts.sh` - Display prompt templates
 - [x] `reset-prompts.sh` - Reset prompts to default state

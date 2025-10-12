@@ -41,6 +41,8 @@ show_help() {
     echo "  health                  Test health check endpoint"
     echo "  upload                  Test video upload endpoint"
     echo "  analyze                 Test video analysis endpoint"
+    echo "  fetch-news              Test news fetching (Tavily + BrowserBase)"
+    echo "  list-articles           Test article listing"
     echo "  detect-scenes           Test scene detection (timestamps only)"
     echo "  describe-scenes         Test scene description (frames + AI)"
     echo "  scenes-viewer           Test scene viewer endpoints"
@@ -54,7 +56,7 @@ show_help() {
     echo "  ./test.sh -v health dev   Run health test on dev with verbose"
     echo "  ./test.sh -pv all prod  Run all tests with pause (30s) and verbose on prod"
     echo "  ./test.sh -p5 upload    Run upload test, pause 5s after"
-    echo "  ./test.sh detect-scenes Test scene detection"
+    echo "  ./test.sh fetch-news    Test news fetching"
     echo "  ./test.sh prompts dev   Test prompts on dev"
     echo ""
 }
@@ -242,12 +244,26 @@ test_scenes_viewer() {
     fi
 }
 
+test_fetch_news() {
+    echo -e "${YELLOW}Note: This test requires TAVILY_API_KEY, BROWSERBASE_API_KEY, and BROWSERBASE_PROJECT_ID${NC}"
+    echo -e "${YELLOW}This may take several minutes to complete${NC}"
+    api_call "POST" "/api/fetch-news" '{"query":"technology news video","maxResults":3}' "Fetch news article with video"
+}
+
+test_list_articles() {
+    api_call "GET" "/api/articles" "" "List all fetched articles"
+}
+
 test_all() {
     test_health
     do_pause
     test_upload
     do_pause
     test_analyze
+    do_pause
+    test_fetch_news
+    do_pause
+    test_list_articles
     do_pause
     test_detect_scenes
     do_pause
@@ -307,7 +323,7 @@ while [[ $# -gt 0 ]]; do
             ENVIRONMENT=$1
             shift
             ;;
-        all|health|upload|analyze|detect-scenes|describe-scenes|scenes-viewer|prompts|fpo)
+        all|health|upload|analyze|fetch-news|list-articles|detect-scenes|describe-scenes|scenes-viewer|prompts|fpo)
             TEST_NAME=$1
             shift
             ;;
@@ -350,6 +366,12 @@ case $TEST_NAME in
         ;;
     analyze)
         test_analyze
+        ;;
+    fetch-news)
+        test_fetch_news
+        ;;
+    list-articles)
+        test_list_articles
         ;;
     detect-scenes)
         test_detect_scenes

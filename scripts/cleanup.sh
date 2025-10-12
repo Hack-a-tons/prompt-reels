@@ -5,32 +5,44 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
+GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
 # Default values
 CONFIRM=false
-KEEP_DATA=false
+TARGET=""
 
 # Function to display help
 show_help() {
-    echo "Usage: ./scripts/cleanup.sh [OPTIONS]"
+    echo "Usage: ./scripts/cleanup.sh [TARGET] [OPTIONS]"
     echo ""
-    echo "Clean output and upload directories"
+    echo "Clean specific directories or everything"
+    echo ""
+    echo "Targets:"
+    echo "  all                     Clean everything (output + uploads + articles + prompts)"
+    echo "  articles                Clean fetched articles and their videos"
+    echo "  output                  Clean output directory (analysis results, logs)"
+    echo "  uploads                 Clean uploaded videos"
+    echo "  prompts                 Reset data/prompts.json to original state"
     echo ""
     echo "Options:"
     echo "  -y, --yes               Skip confirmation prompt"
-    echo "  -k, --keep-data         Keep data/prompts.json (don't reset)"
     echo "  -h, --help              Show this help message"
     echo ""
-    echo "What gets cleaned:"
-    echo "  output/                 All output files and directories"
-    echo "  uploads/                All uploaded video files"
-    echo "  data/prompts.json       Reset to original state (unless --keep-data)"
-    echo ""
     echo "Examples:"
-    echo "  ./scripts/cleanup.sh              # With confirmation"
-    echo "  ./scripts/cleanup.sh -y           # No confirmation"
-    echo "  ./scripts/cleanup.sh -y -k        # Clean but keep prompts data"
+    echo "  ./scripts/cleanup.sh                    # Show help"
+    echo "  ./scripts/cleanup.sh all                # Clean everything (with confirmation)"
+    echo "  ./scripts/cleanup.sh all -y             # Clean everything (no confirmation)"
+    echo "  ./scripts/cleanup.sh articles           # Clean only articles"
+    echo "  ./scripts/cleanup.sh output             # Clean only output"
+    echo "  ./scripts/cleanup.sh uploads            # Clean only uploads"
+    echo "  ./scripts/cleanup.sh prompts            # Reset prompts only"
+    echo ""
+    echo "What's in each target:"
+    echo "  ${GRAY}articles:${NC}  output/articles/, uploads/articles/"
+    echo "  ${GRAY}output:${NC}    output/* (except articles/)"
+    echo "  ${GRAY}uploads:${NC}   uploads/* (except articles/)"
+    echo "  ${GRAY}prompts:${NC}   data/prompts.json → reset to defaults"
     echo ""
 }
 
@@ -45,27 +57,143 @@ while [[ $# -gt 0 ]]; do
             CONFIRM=true
             shift
             ;;
-        -k|--keep-data)
-            KEEP_DATA=true
+        all|articles|output|uploads|prompts)
+            TARGET=$1
             shift
             ;;
         *)
-            echo "Unknown option: $1"
+            echo -e "${RED}Unknown option: $1${NC}"
+            echo ""
             show_help
             exit 1
             ;;
     esac
 done
 
-# Show what will be cleaned
-echo -e "${YELLOW}=== Cleanup ===${NC}"
-echo ""
-echo "The following will be removed:"
-echo -e "  ${BLUE}✗ output/*${NC}     (all analysis results and logs)"
-echo -e "  ${BLUE}✗ uploads/*${NC}    (all uploaded videos)"
-if [ "$KEEP_DATA" = false ]; then
-    echo -e "  ${BLUE}✗ data/prompts.json${NC}  (reset to original state)"
+# If no target specified, show help
+if [ -z "$TARGET" ]; then
+    show_help
+    exit 0
 fi
+
+# Functions to clean each target
+clean_articles() {
+    echo -e "${YELLOW}Cleaning articles...${NC}"
+    local count=0
+    
+    # Clean output/articles/
+    if [ -d "output/articles" ]; then
+        local files=$(find output/articles -type f | wc -l | xargs)
+        rm -rf output/articles/*
+        count=$((count + files))
+        echo -e "${GREEN}✓ Cleaned output/articles/ (removed $files files)${NC}"
+    fi
+    
+    # Clean uploads/articles/
+    if [ -d "uploads/articles" ]; then
+        local files=$(find uploads/articles -type f | wc -l | xargs)
+        rm -rf uploads/articles/*
+        count=$((count + files))
+        echo -e "${GREEN}✓ Cleaned uploads/articles/ (removed $files files)${NC}"
+    fi
+    
+    if [ $count -eq 0 ]; then
+        echo -e "${BLUE}ℹ No articles to clean${NC}"
+    fi
+}
+
+clean_output() {
+    echo -e "${YELLOW}Cleaning output...${NC}"
+    
+    if [ -d "output" ]; then
+        # Exclude articles directory
+        local file_count=0
+        for item in output/*; do
+            if [ "$(basename "$item")" != "articles" ]; then
+                if [ -e "$item" ]; then
+                    rm -rf "$item"
+                    file_count=$((file_count + 1))
+                fi
+            fi
+        done
+        
+        if [ $file_count -gt 0 ]; then
+            echo -e "${GREEN}✓ Cleaned output/ (removed $file_count items)${NC}"
+        else
+            echo -e "${BLUE}ℹ No output files to clean${NC}"
+        fi
+    else
+        echo -e "${BLUE}ℹ output/ doesn't exist${NC}"
+    fi
+}
+
+clean_uploads() {
+    echo -e "${YELLOW}Cleaning uploads...${NC}"
+    
+    if [ -d "uploads" ]; then
+        # Exclude articles directory
+        local file_count=0
+        for item in uploads/*; do
+            if [ "$(basename "$item")" != "articles" ]; then
+                if [ -e "$item" ]; then
+                    rm -rf "$item"
+                    file_count=$((file_count + 1))
+                fi
+            fi
+        done
+        
+        if [ $file_count -gt 0 ]; then
+            echo -e "${GREEN}✓ Cleaned uploads/ (removed $file_count items)${NC}"
+        else
+            echo -e "${BLUE}ℹ No uploaded files to clean${NC}"
+        fi
+    else
+        echo -e "${BLUE}ℹ uploads/ doesn't exist${NC}"
+    fi
+}
+
+clean_prompts() {
+    echo -e "${YELLOW}Resetting prompts...${NC}"
+    
+    if [ -f "data/prompts.json" ]; then
+        npm run reset-prompts > /dev/null 2>&1
+        echo -e "${GREEN}✓ Reset data/prompts.json to original state${NC}"
+    else
+        echo -e "${BLUE}ℹ data/prompts.json doesn't exist${NC}"
+    fi
+}
+
+# Show what will be cleaned
+echo -e "${YELLOW}=== Cleanup: $TARGET ===${NC}"
+echo ""
+
+case $TARGET in
+    all)
+        echo "Will clean:"
+        echo -e "  ${BLUE}✗ output/* (except articles)${NC}"
+        echo -e "  ${BLUE}✗ uploads/* (except articles)${NC}"
+        echo -e "  ${BLUE}✗ output/articles/*, uploads/articles/*${NC}"
+        echo -e "  ${BLUE}✗ data/prompts.json (reset)${NC}"
+        ;;
+    articles)
+        echo "Will clean:"
+        echo -e "  ${BLUE}✗ output/articles/*${NC}"
+        echo -e "  ${BLUE}✗ uploads/articles/*${NC}"
+        ;;
+    output)
+        echo "Will clean:"
+        echo -e "  ${BLUE}✗ output/* (except articles/)${NC}"
+        ;;
+    uploads)
+        echo "Will clean:"
+        echo -e "  ${BLUE}✗ uploads/* (except articles/)${NC}"
+        ;;
+    prompts)
+        echo "Will reset:"
+        echo -e "  ${BLUE}✗ data/prompts.json${NC}"
+        ;;
+esac
+
 echo ""
 
 # Confirm unless -y flag
@@ -79,35 +207,28 @@ if [ "$CONFIRM" = false ]; then
 fi
 
 echo ""
-echo -e "${YELLOW}Cleaning...${NC}"
 
-# Clean output directory
-if [ -d "output" ]; then
-    file_count=$(find output -type f | wc -l | xargs)
-    rm -rf output/*
-    echo -e "${GREEN}✓ Cleaned output/ (removed $file_count files)${NC}"
-else
-    echo -e "${BLUE}ℹ output/ doesn't exist${NC}"
-fi
-
-# Clean uploads directory
-if [ -d "uploads" ]; then
-    file_count=$(find uploads -type f | wc -l | xargs)
-    rm -rf uploads/*
-    echo -e "${GREEN}✓ Cleaned uploads/ (removed $file_count files)${NC}"
-else
-    echo -e "${BLUE}ℹ uploads/ doesn't exist${NC}"
-fi
-
-# Reset prompts.json if not keeping data
-if [ "$KEEP_DATA" = false ]; then
-    if [ -f "data/prompts.json" ]; then
-        npm run reset-prompts > /dev/null 2>&1
-        echo -e "${GREEN}✓ Reset data/prompts.json to original state${NC}"
-    else
-        echo -e "${BLUE}ℹ data/prompts.json doesn't exist${NC}"
-    fi
-fi
+# Execute cleanup based on target
+case $TARGET in
+    all)
+        clean_output
+        clean_uploads
+        clean_articles
+        clean_prompts
+        ;;
+    articles)
+        clean_articles
+        ;;
+    output)
+        clean_output
+        ;;
+    uploads)
+        clean_uploads
+        ;;
+    prompts)
+        clean_prompts
+        ;;
+esac
 
 echo ""
 echo -e "${GREEN}✓ Cleanup complete!${NC}"

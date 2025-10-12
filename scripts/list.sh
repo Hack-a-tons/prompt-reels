@@ -11,12 +11,17 @@ NC='\033[0m' # No Color
 # Default values
 ENVIRONMENT="prod"
 SHOW_FULL=false
+TARGET="videos"
 
 # Function to display help
 show_help() {
-    echo "Usage: ./scripts/list.sh [OPTIONS] [ENVIRONMENT]"
+    echo "Usage: ./scripts/list.sh [TARGET] [OPTIONS] [ENVIRONMENT]"
     echo ""
-    echo "List uploaded videos and their IDs"
+    echo "List uploaded videos or fetched articles"
+    echo ""
+    echo "Targets:"
+    echo "  videos                  List uploaded videos (default)"
+    echo "  articles                List fetched news articles"
     echo ""
     echo "Options:"
     echo "  -f, --full              Show full filenames (not truncated)"
@@ -27,9 +32,11 @@ show_help() {
     echo "  dev                     Local dev server"
     echo ""
     echo "Examples:"
-    echo "  ./scripts/list.sh              # List videos on prod"
-    echo "  ./scripts/list.sh dev          # List videos on dev"
-    echo "  ./scripts/list.sh -f           # Show full filenames"
+    echo "  ./scripts/list.sh                   # List videos on prod"
+    echo "  ./scripts/list.sh videos            # Same as above"
+    echo "  ./scripts/list.sh articles          # List articles"
+    echo "  ./scripts/list.sh articles dev      # List articles on dev"
+    echo "  ./scripts/list.sh -f                # Show full filenames"
     echo ""
 }
 
@@ -42,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -f|--full)
             SHOW_FULL=true
+            shift
+            ;;
+        videos|articles)
+            TARGET=$1
             shift
             ;;
         prod|dev)
@@ -59,6 +70,75 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    echo -e "${RED}Error: jq is required but not installed${NC}"
+    echo "Install with: brew install jq"
+    exit 1
+fi
+
+# Set BASE_URL based on environment
+if [ "$ENVIRONMENT" = "prod" ]; then
+    BASE_URL="https://api.reels.hurated.com"
+else
+    BASE_URL="http://localhost:${PORT:-15000}"
+fi
+
+# List articles using API
+if [ "$TARGET" = "articles" ]; then
+    echo -e "${YELLOW}=== Fetched Articles ($ENVIRONMENT) ===${NC}"
+    echo ""
+    
+    response=$(curl -s "$BASE_URL/api/articles")
+    count=$(echo "$response" | jq -r '.count')
+    
+    if [ "$count" = "0" ] || [ "$count" = "null" ]; then
+        echo -e "${BLUE}No articles found${NC}"
+        echo ""
+        echo -e "${GRAY}# Fetch a news article:${NC}"
+        echo -e "${GRAY}./scripts/fetch-news.sh${NC}"
+        exit 0
+    fi
+    
+    echo -e "${BLUE}Total: $count article(s)${NC}"
+    echo ""
+    
+    # Display articles
+    echo "$response" | jq -r '.articles[] | @json' | while IFS= read -r article; do
+        article_id=$(echo "$article" | jq -r '.articleId')
+        title=$(echo "$article" | jq -r '.title')
+        source=$(echo "$article" | jq -r '.source')
+        video_type=$(echo "$article" | jq -r '.videoType')
+        has_local=$(echo "$article" | jq -r '.hasLocalVideo')
+        fetched=$(echo "$article" | jq -r '.fetchedAt')
+        
+        # Truncate title if not showing full
+        display_title="$title"
+        if [ "$SHOW_FULL" = false ] && [ ${#title} -gt 60 ]; then
+            display_title="${title:0:57}..."
+        fi
+        
+        echo -e "${GREEN}$article_id${NC}"
+        echo -e "   Title: $display_title"
+        echo -e "   Source: $source"
+        echo -e "   Video: $video_type"
+        
+        if [ "$has_local" = "true" ]; then
+            echo -e "   ${GREEN}✓ Video downloaded${NC}"
+            echo -e "   ${GRAY}# Detect scenes:${NC}"
+            echo -e "   ${GRAY}./scripts/detect-scenes.sh $article_id${NC}"
+        else
+            echo -e "   ${YELLOW}○ Embedded video (not downloaded)${NC}"
+        fi
+        
+        echo -e "   Fetched: $fetched"
+        echo ""
+    done
+    
+    exit 0
+fi
+
+# List videos
 echo -e "${YELLOW}=== Uploaded Videos ($ENVIRONMENT) ===${NC}"
 echo ""
 

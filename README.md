@@ -161,6 +161,7 @@ npm run reset-prompts     # Reset prompts.json to clean template
 
 # List uploaded videos (with VIDEO_IDs)
 ./scripts/list.sh                      # List prod videos
+./scripts/list.sh videos               # Same as above
 ./scripts/list.sh dev                  # List dev videos
 ./scripts/list.sh -f                   # Show full filenames
 ```
@@ -173,7 +174,95 @@ npm run reset-prompts     # Reset prompts.json to clean template
 **List shows:**
 - All uploaded videos with their VIDEO_IDs
 - File sizes and upload dates
+- Scene detection status
 - Example usage commands
+
+### Fetch News Articles with Videos 📰
+
+**Automatically fetch news articles with embedded videos** using Tavily (search) and BrowserBase (extraction):
+
+```bash
+# Fetch latest news articles with videos
+./scripts/fetch-news.sh
+
+# Custom search query
+./scripts/fetch-news.sh -q "technology news video"
+
+# Try more articles (default: 5)
+./scripts/fetch-news.sh -n 10
+
+# On dev server
+./scripts/fetch-news.sh dev
+```
+
+**What it does:**
+1. **Searches Tavily** for news articles matching query
+2. **Extracts video URL** from article page using BrowserBase
+3. **Downloads video** to `uploads/articles/`
+4. **Saves metadata** to `output/articles/`
+
+**Metadata saved:**
+```json
+{
+  "articleId": "article-1234567890-123456",
+  "source": {
+    "url": "https://example.com/article",
+    "domain": "example.com"
+  },
+  "video": {
+    "url": "https://example.com/video.mp4",
+    "type": "video" | "embed",
+    "platform": "direct" | "youtube" | "vimeo",
+    "localPath": "uploads/articles/article-123.mp4"
+  },
+  "title": "Article Title",
+  "description": "Article description",
+  "text": "Full article text",
+  "fetchedAt": "2025-01-12T10:30:00.000Z",
+  "images": []
+}
+```
+
+**List fetched articles:**
+```bash
+./scripts/list.sh articles        # List all articles
+./scripts/list.sh articles dev    # List on dev server
+```
+
+**Requirements:**
+- `TAVILY_API_KEY` in `.env`
+- `BROWSERBASE_API_KEY` in `.env`
+- `BROWSERBASE_PROJECT_ID` in `.env`
+
+**After fetching, analyze the video:**
+```bash
+# Get article ID from list.sh articles
+./scripts/detect-scenes.sh article-1234567890-123456
+./scripts/describe-scenes.sh article-1234567890-123456
+```
+
+### Cleanup 🧹
+
+```bash
+# Clean everything (with confirmation)
+./scripts/cleanup.sh all
+
+# Clean specific targets
+./scripts/cleanup.sh articles     # Clean fetched articles only
+./scripts/cleanup.sh output       # Clean output (keep articles)
+./scripts/cleanup.sh uploads      # Clean uploads (keep articles)
+./scripts/cleanup.sh prompts      # Reset prompts to defaults
+
+# Skip confirmation
+./scripts/cleanup.sh all -y
+```
+
+**Targets:**
+- `all` - Everything (output + uploads + articles + prompts)
+- `articles` - Fetched news articles and videos
+- `output` - Analysis results, logs (except articles)
+- `uploads` - Uploaded videos (except articles)
+- `prompts` - Reset `data/prompts.json` to defaults
 
 ### Production Deployment
 ```bash
@@ -301,6 +390,53 @@ Response: {
 - Uses Azure OpenAI or Gemini to analyze scene content
 - Descriptions saved in JSON and displayed in viewer
 - Can specify threshold (re-detects scenes if needed)
+
+### Fetch News Article
+```bash
+POST /api/fetch-news
+Content-Type: application/json
+Body: {
+  query: "latest news video",  // Search query
+  maxResults: 5                // Max articles to try
+}
+Response: {
+  success: true,
+  article: {
+    articleId,
+    source: { url, domain },
+    video: { url, type, platform, localPath },
+    title,
+    description,
+    text,
+    fetchedAt
+  }
+}
+```
+
+### List Articles
+```bash
+GET /api/articles
+Response: {
+  articles: [
+    {
+      articleId,
+      title,
+      source,
+      url,
+      videoType,
+      hasLocalVideo,
+      fetchedAt
+    }
+  ],
+  count
+}
+```
+
+### Get Article
+```bash
+GET /api/articles/:articleId
+Response: Full article data with metadata
+```
 
 ### View Detected Scenes 🎥
 

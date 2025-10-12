@@ -24,19 +24,12 @@ const config = {
     deploymentName: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-4.1',
   },
 
-  // File upload
-  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '209715200'), // 200MB (200 * 1024 * 1024)
+  // Directories
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-
-  // Output
   outputDir: process.env.OUTPUT_DIR || './output',
   dataDir: process.env.DATA_DIR || './data',
 
-  // Video processing
-  framesPerScene: parseInt(process.env.FRAMES_PER_SCENE || '1'),
-  sceneDurationSeconds: parseInt(process.env.SCENE_DURATION_SECONDS || '3'),
-
-  // Optional APIs
+  // News Fetching APIs
   tavilyApiKey: process.env.TAVILY_API_KEY,
   browserbaseApiKey: process.env.BROWSERBASE_API_KEY,
   browserbaseProjectId: process.env.BROWSERBASE_PROJECT_ID,
