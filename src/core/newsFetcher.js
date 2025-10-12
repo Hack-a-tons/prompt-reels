@@ -279,6 +279,36 @@ const downloadVideo = async (videoUrl, articleId) => {
 
   const videoPath = path.join(articlesDir, `${articleId}.mp4`);
 
+  // Check if URL is HLS/m3u8 stream
+  const isHLS = videoUrl.includes('.m3u8') || videoUrl.includes('/hls/');
+  
+  if (isHLS) {
+    log.info('Detected HLS stream, using ffmpeg to download...');
+    
+    try {
+      const { execSync } = require('child_process');
+      
+      // Use ffmpeg to download HLS stream
+      // -i: input URL
+      // -c copy: copy streams without re-encoding (faster)
+      // -bsf:a aac_adtstoasc: fix audio format
+      execSync(
+        `ffmpeg -i "${videoUrl}" -c copy -bsf:a aac_adtstoasc "${videoPath}" -y`,
+        { 
+          stdio: 'pipe',
+          timeout: 120000, // 2 minutes
+        }
+      );
+      
+      log.info(`HLS stream downloaded successfully`);
+      return videoPath;
+    } catch (error) {
+      log.error(`Failed to download HLS stream with ffmpeg: ${error.message}`);
+      throw new Error(`HLS download failed: ${error.message}`);
+    }
+  }
+
+  // Regular MP4/direct download
   try {
     const response = await axios({
       method: 'get',
