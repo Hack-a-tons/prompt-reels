@@ -8,7 +8,7 @@ NC='\033[0m' # No Color
 
 # Default values
 LIMIT=10
-ENVIRONMENT="dev"
+ENVIRONMENT="prod"
 
 # Load environment variables
 if [ -f .env ]; then
@@ -26,14 +26,16 @@ show_help() {
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Environment:"
-    echo "  dev                     Local dev server (default)"
-    echo "  prod                    Production server"
+    echo "  prod                    Production server (default)"
+    echo "                          https://api.reels.hurated.com"
+    echo "  dev                     Local dev server"
+    echo "                          http://localhost:PORT"
     echo ""
     echo "Examples:"
-    echo "  ./scripts/show-prompts.sh           # Show top 10 prompts (dev)"
-    echo "  ./scripts/show-prompts.sh prod      # Show top 10 prompts (prod)"
+    echo "  ./scripts/show-prompts.sh           # Show top 10 prompts (prod)"
+    echo "  ./scripts/show-prompts.sh dev       # Show top 10 prompts (dev)"
     echo "  ./scripts/show-prompts.sh -n 5      # Show top 5 prompts"
-    echo "  ./scripts/show-prompts.sh -n 3 prod # Show top 3 prompts (prod)"
+    echo "  ./scripts/show-prompts.sh -n 3 dev  # Show top 3 prompts (dev)"
     echo ""
 }
 

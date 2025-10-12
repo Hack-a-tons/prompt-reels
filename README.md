@@ -104,22 +104,22 @@ cp .env.example .env
 
 ### Run Development Server
 ```bash
-./run.sh                 # Quick start (frees port + starts server)
+./scripts/run-dev.sh     # Quick start (frees port + starts server)
 npm run dev              # Start with nodemon (auto-reload)
 npm start                # Start without auto-reload
 ```
 
 **Note:** 
-- `run.sh` can be run from anywhere and automatically handles port conflicts
+- `scripts/run-dev.sh` can be run from anywhere and automatically handles port conflicts
 - nodemon ignores `data/`, `uploads/`, and `output/` directories to prevent restarts during FPO runs and video processing
 
 ### Test the API
 ```bash
-./test.sh health          # Test dev server (localhost)
-./test.sh health prod     # Test production server
+./test.sh health          # Test production server (default)
+./test.sh health dev      # Test dev server (localhost)
 ./test.sh -v health       # Verbose mode (shows curl & JSON)
 ./test.sh -p5 health      # Pause 5s after test
-./test.sh all prod -pv    # Run all tests on prod with pause & verbose
+./test.sh all -pv         # Run all tests on prod with pause & verbose
 ```
 
 ### Free Port (if needed)
@@ -246,17 +246,20 @@ GET /api/fpo/dashboard
 
 ### Manage Evolution
 ```bash
-# Start evolution (5 iterations)
-./scripts/evolve.sh start prod
+# Start evolution (5 iterations on prod)
+./evolve.sh start
 
 # Start with custom parameters
-./scripts/evolve.sh start -n 7 -i 2 prod
+./evolve.sh start -n 7 -i 2
 
 # Upload video and evolve
-./scripts/evolve.sh start -v sample.mp4 prod
+./evolve.sh start -v sample.mp4
+
+# Run on dev server
+./evolve.sh start dev
 
 # Check evolution status
-./scripts/evolve.sh status prod
+./evolve.sh status
 
 # View detailed guide
 cat EVOLUTION_GUIDE.md
@@ -264,11 +267,11 @@ cat EVOLUTION_GUIDE.md
 
 ### View Best Prompts
 ```bash
-# Show top 10 prompts (default)
+# Show top 10 prompts (prod)
 ./scripts/show-prompts.sh
 
-# Show top 5 prompts
-./scripts/show-prompts.sh -n 5
+# Show top 5 prompts on dev
+./scripts/show-prompts.sh -n 5 dev
 
 # Show all prompts
 ./scripts/show-prompts.sh -n 100

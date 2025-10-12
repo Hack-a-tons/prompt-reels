@@ -135,29 +135,29 @@ curl https://api.reels.hurated.com/api/fpo/status | jq .
 
 ### Installation
 
-Already installed in `scripts/evolve.sh`. Make executable:
+Already installed in root as `evolve.sh`. Make executable:
 ```bash
-chmod +x scripts/evolve.sh
+chmod +x evolve.sh
 ```
 
 ### Commands
 
 #### 1. **Start Evolution**
 ```bash
-# Basic (5 iterations on dev)
-./scripts/evolve.sh start
+# Basic (5 iterations on prod)
+./evolve.sh start
 
-# Production (5 iterations)
-./scripts/evolve.sh start prod
+# Dev server (5 iterations)
+./evolve.sh start dev
 
 # Custom iterations (7 rounds, evolve every 2)
-./scripts/evolve.sh start -n 7 -i 2 prod
+./evolve.sh start -n 7 -i 2
 
 # Upload video first, then evolve
-./scripts/evolve.sh start -v sample.mp4 prod
+./evolve.sh start -v sample.mp4
 
 # Evolution every 3 iterations (for longer runs)
-./scripts/evolve.sh start -n 9 -i 3 prod
+./evolve.sh start -n 9 -i 3
 ```
 
 **Output:**
@@ -186,17 +186,20 @@ Results:
   Max generation: 2
 
 View detailed results:
-  ./scripts/evolve.sh status prod
-  ./scripts/show-prompts.sh prod
+  ./evolve.sh status
+  ./scripts/show-prompts.sh
 ```
 
 #### 2. **Check Status**
 ```bash
-# Check current evolution state
-./scripts/evolve.sh status prod
+# Check current evolution state (prod)
+./evolve.sh status
+
+# Check dev server
+./evolve.sh status dev
 
 # Alias
-./scripts/evolve.sh show prod
+./evolve.sh show
 ```
 
 **Output:**
@@ -230,17 +233,20 @@ View at: https://wandb.ai/prompt-reels
 
 #### 3. **View Detailed Prompts**
 ```bash
-# Show all prompts with full text
-./scripts/show-prompts.sh prod
+# Show all prompts with full text (prod)
+./scripts/show-prompts.sh
 
 # Show top 3
-./scripts/show-prompts.sh -n 3 prod
+./scripts/show-prompts.sh -n 3
+
+# Show on dev
+./scripts/show-prompts.sh dev
 ```
 
 ### All Options
 
 ```bash
-./scripts/evolve.sh [COMMAND] [OPTIONS] [ENVIRONMENT]
+./evolve.sh [COMMAND] [OPTIONS] [ENVIRONMENT]
 
 Commands:
   start                   Start prompt evolution
@@ -255,8 +261,8 @@ Options:
   -h, --help              Show this help message
 
 Environment:
-  dev                     Local dev server (default)
-  prod                    Production server
+  prod                    Production server (default)
+  dev                     Local dev server
 ```
 
 ---
@@ -347,20 +353,20 @@ curl -X POST \
   https://api.reels.hurated.com/api/analyze
 
 # 3. Start evolution
-./scripts/evolve.sh start -n 7 prod
+./evolve.sh start -n 7
 
 # 4. Check status
-./scripts/evolve.sh status prod
+./evolve.sh status
 
 # 5. View evolved prompts
-./scripts/show-prompts.sh prod
+./scripts/show-prompts.sh
 ```
 
 ### Or Use Shortcut:
 
 ```bash
 # Upload video and evolve in one command
-./scripts/evolve.sh start -v sample.mp4 -n 7 prod
+./evolve.sh start -v sample.mp4 -n 7
 ```
 
 ---
@@ -369,7 +375,7 @@ curl -X POST \
 
 ### Scenario 1: Quick Test (3 iterations)
 ```bash
-./scripts/evolve.sh start -n 3 prod
+./evolve.sh start -n 3
 ```
 - Tests original prompts
 - Creates 1 evolved prompt
@@ -377,7 +383,7 @@ curl -X POST \
 
 ### Scenario 2: Standard Evolution (5 iterations)
 ```bash
-./scripts/evolve.sh start -n 5 prod
+./evolve.sh start -n 5
 ```
 - Creates 2 generations
 - Balanced speed/results
@@ -385,7 +391,7 @@ curl -X POST \
 
 ### Scenario 3: Deep Evolution (10 iterations)
 ```bash
-./scripts/evolve.sh start -n 10 -i 2 prod
+./evolve.sh start -n 10 -i 2
 ```
 - Creates 5 generations
 - Tests many evolved prompts
@@ -467,7 +473,10 @@ ssh reels.hurated.com "cat prompt-reels/data/prompts.json" | \
 
 ```bash
 # View all prompts with details
-./scripts/show-prompts.sh prod
+./scripts/show-prompts.sh
+
+# View on dev
+./scripts/show-prompts.sh dev
 
 # Reset to original prompts
 npm run reset-prompts
@@ -484,9 +493,9 @@ ssh reels.hurated.com "docker compose -f prompt-reels/compose.yml logs -f"
 ## Summary
 
 ✅ **Evolved prompts stored in:** `data/prompts.json`  
-✅ **Start evolution:** `./scripts/evolve.sh start prod`  
-✅ **Check status:** `./scripts/evolve.sh status prod`  
-✅ **View prompts:** `./scripts/show-prompts.sh prod`  
+✅ **Start evolution:** `./evolve.sh start`  
+✅ **Check status:** `./evolve.sh status`  
+✅ **View prompts:** `./scripts/show-prompts.sh`  
 ✅ **Track experiments:** https://wandb.ai/prompt-reels
 
 The system is now fully self-improving! 🚀

@@ -15,7 +15,7 @@ fi
 # Default values
 VERBOSE=false
 PAUSE_DURATION=0
-ENVIRONMENT="dev"
+ENVIRONMENT="prod"
 BASE_URL=""
 
 # Function to display help
@@ -31,10 +31,10 @@ show_help() {
     echo "                          Can specify custom duration: -p5 or --pause 10"
     echo ""
     echo "Environment:"
-    echo "  dev                     Test against local dev server (default)"
-    echo "                          http://localhost:PORT"
-    echo "  prod                    Test against production server"
+    echo "  prod                    Test against production server (default)"
     echo "                          https://api.reels.hurated.com"
+    echo "  dev                     Test against local dev server"
+    echo "                          http://localhost:PORT"
     echo ""
     echo "Test Names:"
     echo "  all                     Run all tests"
@@ -45,13 +45,13 @@ show_help() {
     echo "  fpo                     Test federated prompt optimization"
     echo ""
     echo "Examples:"
-    echo "  ./test.sh all           Run all tests (dev)"
-    echo "  ./test.sh all prod      Run all tests on production"
+    echo "  ./test.sh all           Run all tests (prod)"
+    echo "  ./test.sh all dev       Run all tests on dev"
     echo "  ./test.sh -v health     Run health test with verbose output"
-    echo "  ./test.sh -v health prod  Run health test on production with verbose"
-    echo "  ./test.sh -pv all dev   Run all tests with pause (30s) and verbose on dev"
+    echo "  ./test.sh -v health dev   Run health test on dev with verbose"
+    echo "  ./test.sh -pv all prod  Run all tests with pause (30s) and verbose on prod"
     echo "  ./test.sh -p5 upload    Run upload test, pause 5s after"
-    echo "  ./test.sh prompts prod  Test prompts on production"
+    echo "  ./test.sh prompts dev   Test prompts on dev"
     echo ""
 }
 

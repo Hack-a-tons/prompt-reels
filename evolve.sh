@@ -9,7 +9,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default values
-ENVIRONMENT="dev"
+ENVIRONMENT="prod"
 ITERATIONS=5
 EVOLUTION_INTERVAL=2
 ENABLE_EVOLUTION=true
@@ -23,7 +23,7 @@ fi
 
 # Function to display help
 show_help() {
-    echo "Usage: ./scripts/evolve.sh [COMMAND] [OPTIONS] [ENVIRONMENT]"
+    echo "Usage: ./evolve.sh [COMMAND] [OPTIONS] [ENVIRONMENT]"
     echo ""
     echo "Manage prompt evolution (Federated Prompt Optimization)"
     echo ""
@@ -40,21 +40,24 @@ show_help() {
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Environment:"
-    echo "  dev                     Local dev server (default)"
-    echo "  prod                    Production server"
+    echo "  prod                    Production server (default)"
+    echo "  dev                     Local dev server"
     echo ""
     echo "Examples:"
     echo "  # Start evolution on production (5 iterations)"
-    echo "  ./scripts/evolve.sh start prod"
+    echo "  ./evolve.sh start"
     echo ""
     echo "  # Start with 7 iterations, evolve every 2 rounds"
-    echo "  ./scripts/evolve.sh start -n 7 -i 2 prod"
+    echo "  ./evolve.sh start -n 7 -i 2"
     echo ""
     echo "  # Upload video and then evolve"
-    echo "  ./scripts/evolve.sh start -v sample.mp4 prod"
+    echo "  ./evolve.sh start -v sample.mp4"
+    echo ""
+    echo "  # Run on dev server"
+    echo "  ./evolve.sh start dev"
     echo ""
     echo "  # Check evolution status"
-    echo "  ./scripts/evolve.sh status prod"
+    echo "  ./evolve.sh status"
     echo ""
     echo "Evolution Process:"
     echo "  - Iteration 1: Test original prompts"
