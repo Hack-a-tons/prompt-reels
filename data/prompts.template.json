@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "templates": [
+    {
+      "id": "baseline",
+      "name": "Baseline Description",
+      "template": "Describe what you see in this video frame in detail.",
+      "weight": 1,
+      "performance": []
+    },
+    {
+      "id": "structured",
+      "name": "Structured Analysis",
+      "template": "Analyze this video frame and provide: 1) Main subjects, 2) Actions occurring, 3) Setting/environment, 4) Notable details.",
+      "weight": 1,
+      "performance": []
+    },
+    {
+      "id": "narrative",
+      "name": "Narrative Style",
+      "template": "Describe this scene as if you're narrating a story. What's happening, who's involved, and what's the context?",
+      "weight": 1,
+      "performance": []
+    },
+    {
+      "id": "technical",
+      "name": "Technical Details",
+      "template": "Provide a technical description of this frame including: composition, lighting, subjects, actions, and any text visible.",
+      "weight": 1,
+      "performance": []
+    },
+    {
+      "id": "comprehensive",
+      "name": "Comprehensive Analysis",
+      "template": "Analyze this video frame comprehensively: describe the scene, identify all subjects and objects, explain what actions are taking place, note the setting and atmosphere, and mention any text or graphics visible.",
+      "weight": 1,
+      "performance": []
+    }
+  ],
+  "domains": ["news", "sports", "reels"],
+  "global_prompt": null
+}

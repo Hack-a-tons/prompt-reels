@@ -1,0 +1,50 @@
+{
+  "name": "prompt-reels",
+  "version": "1.0.0",
+  "description": "A Self-Improving Video Description Agent using Google Gemini and Federated Prompt Optimization",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon --ignore data/ --ignore uploads/ --ignore output/ src/index.js",
+    "start": "node src/index.js",
+    "test": "node src/test.js",
+    "free-port": "./scripts/free-port.sh",
+    "reset-prompts": "./scripts/reset-prompts.sh"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "data/*",
+      "uploads/*",
+      "output/*",
+      "*.json"
+    ],
+    "watch": [
+      "src/**/*.js",
+      ".env"
+    ]
+  },
+  "keywords": [
+    "gemini",
+    "video-analysis",
+    "federated-learning",
+    "prompt-optimization",
+    "weave",
+    "ai"
+  ],
+  "author": "Denis Bystruev, Valerii Egorov",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "axios": "^1.7.9",
+    "body-parser": "^1.20.3",
+    "cosine-similarity": "^1.0.1",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ffmpeg-static": "^5.2.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.73.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

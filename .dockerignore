@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+README.md
+TODO.md
+DENIS.md
+VALERII.md
+.DS_Store
+uploads/*
+output/*
+test-videos/*
+*.log
+.vscode
+.idea

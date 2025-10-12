@@ -8,19 +8,25 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 ## Detailed Development Plan
 (Updated to reflect new architecture and tool usage)
 
-### Phase 1 — Repository & Environment Setup
-- [ ] Initialize GitHub repo and push initial files.
-- [ ] Create `.env.example` with `GOOGLE_API_KEY` and `WANDB_API_KEY`.
-- [ ] Install dependencies: `express`, `ffmpeg-static`, `@google/generative-ai`, `weave`, `cosine-similarity`.
-- [ ] Setup folder structure (`src/api`, `src/core`, `data`, `output`).
-- [ ] Run basic Weave test log.
+### Phase 1 — Repository & Environment Setup ✅
+- [x] Initialize GitHub repo and push initial files.
+- [x] Create `.env.example` with `GOOGLE_API_KEY` and `WANDB_API_KEY`.
+- [x] Install dependencies: `express`, `ffmpeg-static`, `@google/generative-ai`, `cosine-similarity`.
+- [x] Setup folder structure (`src/api`, `src/core`, `data`, `output`).
+- [x] Created Weave logging system (file-based).
+- [x] Created `test.sh` script with `-v` and `-p` flags.
+- [x] Created `Dockerfile` and `compose.yml` for production.
+- [x] Server running on port 15000 with health check.
+- [x] Basic API endpoints: upload, analyze, prompts, FPO.
 
 ### Phase 2 — Core API Server
-- [ ] Implement video upload endpoint with `multer`.
-- [ ] Add ffmpeg extraction (`1 frame / 3 seconds`). 
-- [ ] Integrate Gemini API to describe each frame.
+- [ ] Test video upload endpoint with `multer` (already implemented).
+- [ ] Test ffmpeg extraction (`1 frame / 3 seconds`) with real video.
+- [ ] Test Gemini API to describe each frame.
 - [ ] Save results as `scene_descriptions.json`.
 - [ ] Log every run to Weave with prompt version and timestamp.
+- [ ] Find 3-5 short test videos (Pexels, Pixabay, Reuters) for different domains.
+- [ ] Create `data/reference.json` with ground-truth descriptions for evaluation.
 
 ### Phase 3 — Prompt Optimization Loop (FPO)
 - [ ] Create 3–5 prompt templates (`data/prompts.json`).
@@ -39,16 +45,99 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 - [ ] Embed Weave charts to show improvement curve.
 
 ### Phase 6 — Testing & Presentation
-- [ ] Validate 3–5 test videos.
+- [ ] Validate 3–5 test videos across domains (news, sports, reels).
 - [ ] Record demo (upload → description → prompt evolution).
-- [ ] Finalize slides and Weave screenshots.
+- [ ] Create presentation slides (Problem, Solution, Demo, Results).
+- [ ] Include Weave dashboard screenshots and "prompt improvement" chart.
+- [ ] Write demo script (≤ 1 min spoken narration).
+- [ ] Prepare submission text (Project summary, Tech stack, Prizes targeted).
 - [ ] Submit to hackathon portal before 1:30 pm Sunday.
+- [ ] Post demo clip on X for "Viral on X" prize.
 
 ---
 
 ## Stretch Goals
 - [ ] Real-time Weave visualization updates.
 - [ ] Deploy on Google Cloud Run.
-- [ ] Integrate multiple Gemini model variants (e.g., `gemini-1.5-pro`, `gemini-flash`). 
+- [ ] Integrate multiple Gemini model variants (e.g., `gemini-2.5-pro`, `gemini-2.5-flash`). 
 - [ ] Add feedback scoring UI.
-- [ ] Post demo to X for “Viral on X” prize.
+- [ ] Post demo to X for "Viral on X" prize.
+
+---
+
+## Current Status
+
+**Last Updated**: October 11, 2025  
+**Repository**: `git@github.com:Hack-a-tons/prompt-reels.git`  
+**Port**: 15000 (available on production server)  
+**Domain**: reels.hurated.com
+
+### What's Working
+- Express API server on port 15000
+- Health check: `GET /health`
+- API endpoints: upload, analyze, prompts, FPO
+- Weave logging to `output/weave-logs/` (JSONL format)
+- Test script: `./test.sh` with `-v` and `-p` flags
+- Docker ready: `docker compose up -d`
+- Gemini + Azure OpenAI fallback configured
+
+### API Endpoints
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| GET | `/health` | Working |
+| POST | `/api/upload` | Ready |
+| POST | `/api/analyze` | Ready |
+| GET | `/api/prompts` | Working |
+| GET | `/api/results/:videoId` | Ready |
+| POST | `/api/fpo/run` | Ready |
+| GET | `/api/fpo/status` | Ready |
+
+### Test Results
+```bash
+./test.sh health -v     # Returns 200 with config
+./test.sh prompts -v    # Returns 5 templates
+```
+
+---
+
+## Git Commit
+
+Ready to commit Phase 1:
+```bash
+git add .
+git commit -m "Phase 1: Complete basic infrastructure
+
+- Set up Express API server with health check
+- Integrate Google Gemini for image description  
+- Implement video processing with ffmpeg
+- Create FPO (Federated Prompt Optimization) system
+- Add Weave logging for experiment tracking
+- Configure Docker deployment with compose.yml
+- Create test.sh script with -v and -p flags
+- Add Azure OpenAI as fallback option
+- Port 15000, domain: reels.hurated.com"
+
+git push origin main
+```
+
+### Files to Commit
+- Configuration: `.env.example`, `.gitignore`, `.dockerignore`
+- Code: `package.json`, `src/`, `data/`
+- Deployment: `Dockerfile`, `compose.yml`
+- Testing: `test.sh`
+- Docs: `README.md`, `TODO.md`
+
+---
+
+## Notes
+- `.env` gitignored (contains real API keys)
+- Weave: File-based logging (JSONL) until official SDK integrated
+- ffmpeg: Bundled via ffmpeg-static
+- Video uploads: 100MB limit (configurable)
+- Test flags: `-pv`, `-vp`, `-p5`, etc. all work
+- Keep code lightweight and modular
+- Test videos and reference data go in `/data/`
+- Presentation materials go in `/slides/`
+- Save all output under `/output/` for demo
+- **Important:** `data/prompts.json` is runtime state (accumulates performance history). Use `npm run reset-prompts` before committing for clean state
+- **Nodemon:** Configured to ignore `data/`, `uploads/`, `output/` to prevent restarts during FPO runs and video processing

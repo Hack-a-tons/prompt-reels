@@ -1,0 +1,131 @@
+{
+  "version": "1.0.0",
+  "templates": [
+    {
+      "id": "baseline",
+      "name": "Baseline Description",
+      "template": "Describe what you see in this video frame in detail.",
+      "weight": -0.014999510455334137,
+      "performance": [
+        {
+          "score": 0.017476683722776293,
+          "timestamp": "2025-10-12T00:13:17.980Z"
+        },
+        {
+          "score": 0.009011656831169952,
+          "timestamp": "2025-10-12T00:18:29.653Z"
+        },
+        {
+          "score": -0.020496725905753212,
+          "timestamp": "2025-10-12T00:19:43.908Z"
+        },
+        {
+          "score": -0.014999510455334137,
+          "timestamp": "2025-10-12T00:20:46.974Z"
+        }
+      ]
+    },
+    {
+      "id": "structured",
+      "name": "Structured Analysis",
+      "template": "Analyze this video frame and provide: 1) Main subjects, 2) Actions occurring, 3) Setting/environment, 4) Notable details.",
+      "weight": -0.002252863329684026,
+      "performance": [
+        {
+          "score": 0.00029430322133235424,
+          "timestamp": "2025-10-12T00:13:17.980Z"
+        },
+        {
+          "score": -0.0006348497086939269,
+          "timestamp": "2025-10-12T00:18:29.653Z"
+        },
+        {
+          "score": -0.007888684951093017,
+          "timestamp": "2025-10-12T00:19:43.908Z"
+        },
+        {
+          "score": -0.002252863329684026,
+          "timestamp": "2025-10-12T00:20:46.974Z"
+        }
+      ]
+    },
+    {
+      "id": "narrative",
+      "name": "Narrative Style",
+      "template": "Describe this scene as if you're narrating a story. What's happening, who's involved, and what's the context?",
+      "weight": 0.008294750277000202,
+      "performance": [
+        {
+          "score": -0.013674971109730233,
+          "timestamp": "2025-10-12T00:13:17.980Z"
+        },
+        {
+          "score": -0.010588696860529663,
+          "timestamp": "2025-10-12T00:18:29.653Z"
+        },
+        {
+          "score": -0.01553779775233969,
+          "timestamp": "2025-10-12T00:19:43.908Z"
+        },
+        {
+          "score": 0.008294750277000202,
+          "timestamp": "2025-10-12T00:20:46.974Z"
+        }
+      ]
+    },
+    {
+      "id": "technical",
+      "name": "Technical Details",
+      "template": "Provide a technical description of this frame including: composition, lighting, subjects, actions, and any text visible.",
+      "weight": 0.013719937802855013,
+      "performance": [
+        {
+          "score": -0.002061526185137539,
+          "timestamp": "2025-10-12T00:13:17.980Z"
+        },
+        {
+          "score": 0.03381978182360355,
+          "timestamp": "2025-10-12T00:18:29.653Z"
+        },
+        {
+          "score": -0.02264773379264069,
+          "timestamp": "2025-10-12T00:19:43.908Z"
+        },
+        {
+          "score": 0.013719937802855013,
+          "timestamp": "2025-10-12T00:20:46.974Z"
+        }
+      ]
+    },
+    {
+      "id": "comprehensive",
+      "name": "Comprehensive Analysis",
+      "template": "Analyze this video frame comprehensively: describe the scene, identify all subjects and objects, explain what actions are taking place, note the setting and atmosphere, and mention any text or graphics visible.",
+      "weight": 0.018069081175257146,
+      "performance": [
+        {
+          "score": 0.0045525705097686844,
+          "timestamp": "2025-10-12T00:13:17.980Z"
+        },
+        {
+          "score": -0.003970646494777199,
+          "timestamp": "2025-10-12T00:18:29.653Z"
+        },
+        {
+          "score": -0.017551067474836504,
+          "timestamp": "2025-10-12T00:19:43.909Z"
+        },
+        {
+          "score": 0.018069081175257146,
+          "timestamp": "2025-10-12T00:20:46.974Z"
+        }
+      ]
+    }
+  ],
+  "domains": [
+    "news",
+    "sports",
+    "reels"
+  ],
+  "global_prompt": "comprehensive"
+}

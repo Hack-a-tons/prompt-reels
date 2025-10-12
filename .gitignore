@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+
+# Uploaded files
+uploads/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Output files
+output/
+*.json
+!data/*.json
+!package.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+test-videos/

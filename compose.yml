@@ -1,0 +1,37 @@
+services:
+  prompt-reels:
+    build: .
+    container_name: prompt-reels
+    restart: unless-stopped
+    ports:
+      - "${PORT}:${PORT}"
+    environment:
+      - PORT=${PORT}
+      - NODE_ENV=${NODE_ENV}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - WANDB_PROJECT=${WANDB_PROJECT}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_API_VERSION=${AZURE_API_VERSION}
+      - AZURE_DEPLOYMENT_NAME=${AZURE_DEPLOYMENT_NAME}
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE}
+      - UPLOAD_DIR=${UPLOAD_DIR}
+      - OUTPUT_DIR=${OUTPUT_DIR}
+      - DATA_DIR=${DATA_DIR}
+      - FRAMES_PER_SCENE=${FRAMES_PER_SCENE}
+      - SCENE_DURATION_SECONDS=${SCENE_DURATION_SECONDS}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - BROWSERBASE_API_KEY=${BROWSERBASE_API_KEY}
+      - BROWSERBASE_PROJECT_ID=${BROWSERBASE_PROJECT_ID}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:${PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

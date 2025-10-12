@@ -47,7 +47,7 @@ Built for **WeaveHacks 2 — Self-Improving Agents**.
 ---
 
 ## 🔬 Federated Prompt Optimization (FPO)
-This project is inspired by *FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits* (arXiv:2509.24701) and related works such as *FedPrompt* and *PromptFL*.  
+This project is inspired by [*FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits*](https://arxiv.org/abs/2509.24701) and related works such as *FedPrompt* and *PromptFL*.  
 
 The FPO principle allows multiple agents to improve a shared prompt collaboratively **without sharing raw data**. Each client locally evaluates prompts on its own data and reports only summarized performance (reward). The central aggregator merges results and redistributes improved prompts.
 
@@ -61,9 +61,9 @@ The FPO principle allows multiple agents to improve a shared prompt collaborativ
 This approach enables *self-improving behavior* without retraining the model itself.
 
 **References:**
-- FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits. arXiv:2509.24701 (2025)
-- FedPrompt: Communication-Efficient Federated Prompt Tuning. arXiv:2208.05166 (2023)
-- PromptFL: Federated Learning for Large Language Model Prompt Optimization. arXiv:2307.01961 (2023)
+- [FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits](https://arxiv.org/abs/2509.24701). arXiv:2509.24701 (2025)
+- [FedPrompt: Communication-Efficient and Privacy Preserving Prompt Tuning in Federated Learning](https://arxiv.org/abs/2208.12268). arXiv:2208.12268 (2022)
+- [Federated Prompting and Chain-of-Thought Reasoning for Improving LLMs Answering](https://arxiv.org/abs/2310.15080). arXiv:2310.15080 (2023)
 
 ---
 
@@ -81,20 +81,143 @@ This approach enables *self-improving behavior* without retraining the model its
 ---
 
 ## ⚙️ Quick Start
-Clone the repo:
+
+### Prerequisites
+- Node.js 20+
+- npm
+- Docker (for production deployment)
+
+### Development Setup
 ```bash
-git clone https://github.com/Hack-a-tons/prompt-reels.git
+# Clone and install
+git clone git@github.com:Hack-a-tons/prompt-reels.git
 cd prompt-reels
 npm install
-cp .env.example .env    # add Gemini and Weave keys
-npm start
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your API keys:
+# - GOOGLE_API_KEY (Google Gemini)
+# - WANDB_API_KEY (Weights & Biases)
+# - AZURE_OPENAI_API_KEY (optional fallback)
 ```
 
-To test a local run:
+### Run Development Server
 ```bash
-node src/runLocal.js --video sample.mp4
+./run.sh                 # Quick start (frees port + starts server)
+npm run dev              # Start with nodemon (auto-reload)
+npm start                # Start without auto-reload
 ```
-Result → `output/scene_descriptions.json`
+
+**Note:** 
+- `run.sh` can be run from anywhere and automatically handles port conflicts
+- nodemon ignores `data/`, `uploads/`, and `output/` directories to prevent restarts during FPO runs and video processing
+
+### Test the API
+```bash
+./test.sh health          # Test health endpoint
+./test.sh -v health       # Verbose mode (shows curl & JSON)
+./test.sh -p5 health      # Pause 5s after test
+./test.sh all -pv         # Run all tests with pause & verbose
+```
+
+### Free Port (if needed)
+```bash
+npm run free-port         # Kill processes using PORT from .env
+# Or directly:
+./scripts/free-port.sh
+```
+
+### Reset Prompts (if needed)
+```bash
+npm run reset-prompts     # Reset prompts.json to clean template
+# Or directly:
+./scripts/reset-prompts.sh
+```
+**Note:** `data/prompts.json` accumulates performance history during FPO runs. Reset it before committing if you want a clean state.
+
+### Production Deployment
+```bash
+# Using Docker Compose
+docker compose up -d      # Start in detached mode
+docker compose logs -f    # View logs
+docker compose down       # Stop
+
+# Domain: reels.hurated.com
+# Port: 15000 (mapped internally)
+```
+
+**Nginx Configuration:**  
+See `nginx.conf.example` for full configuration. The main domain `reels.hurated.com` proxies to `localhost:15000`.
+
+**No subdomains needed** - All API endpoints are served from the main domain (e.g., `https://reels.hurated.com/api/upload`). If you add a frontend later, you can either:
+- Serve it from the same domain with different paths, or
+- Use `api.reels.hurated.com` for the API if you prefer separation
+
+---
+
+## 📡 API Endpoints
+
+### Health Check
+```bash
+GET /health
+```
+
+### Upload Video
+```bash
+POST /api/upload
+Content-Type: multipart/form-data
+Body: video file
+Response: { videoId, filename, size, path }
+```
+
+### Analyze Video
+```bash
+POST /api/analyze
+Content-Type: application/json
+Body: { videoId, promptId? }
+Response: { success, result, outputPath }
+```
+
+### Get Prompts
+```bash
+GET /api/prompts
+Response: { version, templates, domains, global_prompt }
+```
+
+### Get Results
+```bash
+GET /api/results/:videoId
+Response: Analysis results JSON
+```
+
+### FPO (Federated Prompt Optimization)
+```bash
+POST /api/fpo/run
+{
+  "iterations": 3  // Number of optimization rounds
+}
+# Note: Uses extracted frames from previous video analysis for testing
+# If no frames available, runs without image evaluation
+
+GET /api/fpo/status
+# Returns current prompt weights and performance
+```
+
+---
+
+## ⚠️ API Quota Limits
+
+### Gemini Free Tier
+- **Per-minute**: 2 requests/minute (handled automatically with 30s delays)
+- **Per-day**: 50 requests/day total
+- **FPO impact**: 3 iterations × 5 prompts × 3 domains = 45 requests
+- **Quota tracking**: Shows `[X/50] requests today` in logs
+
+**If you hit daily quota:**
+1. Wait for reset (midnight Pacific Time)
+2. Use Azure OpenAI fallback (configure in `.env`)
+3. Reduce iterations: `{"iterations": 1}`
 
 ---
 
@@ -119,7 +242,7 @@ Result → `output/scene_descriptions.json`
 | Name | Role | Focus |
 |------|------|--------|
 | **Denis Bystruev** | Developer / Architect | Backend, Gemini integration, Weave logging |
-| **Valerii [Last name]** | AI Ops / Data / Presentation | Video sourcing, prompt testing, docs & demo |
+| **Valerii Egorov** | AI Ops / Data / Presentation | Video sourcing, prompt testing, docs & demo |
 
 ---
 
@@ -134,4 +257,4 @@ Result → `output/scene_descriptions.json`
 ---
 
 ## 📝 License
-MIT
+[MIT](https://opensource.org/license/mit)
