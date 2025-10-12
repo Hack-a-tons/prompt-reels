@@ -399,27 +399,6 @@ npm run reset-prompts     # Reset prompts.json to clean template
 # Keep prompts data (don't reset)
 ./scripts/cleanup.sh -y -k
 ```
-**Removes:**
-- `output/*` - All analysis results, scene data, logs
-- `uploads/*` - All uploaded videos
-- `data/prompts.json` - Reset to original (unless `-k`)
-
-### Upload & List Videos
-```bash
-# Upload a video
-./scripts/upload.sh video.mp4          # Upload to prod
-./scripts/upload.sh video.mp4 dev      # Upload to dev
-
-# List uploaded videos (with VIDEO_IDs)
-./scripts/list.sh                      # List prod videos
-./scripts/list.sh videos               # Same as above
-./scripts/list.sh dev                  # List dev videos
-./scripts/list.sh -f                   # Show full filenames
-```
-
-**Upload returns:**
-- `VIDEO_ID` - Use this with detect-scenes.sh, analyze, etc.
-- Latest VIDEO_ID saved to `/tmp/prompt-reels-latest-video-id`
 - Shows example commands with the VIDEO_ID
 
 **List shows:**
@@ -990,6 +969,123 @@ WANDB_PROJECT=prompt-reels
 - System tries to connect to W&B cloud first
 - Falls back to file-based logging if W&B unavailable
 - All logging is non-blocking (won't break if W&B fails)
+
+---
+
+## 🎨 Recent UI/UX Improvements (January 2025)
+
+### Dashboard Enhancements
+- **Auto-playing Video Thumbnails**: Dashboard shows small video previews (160x90px) that autoplay
+- **Score Coloring**: Match scores are color-coded (🟢 green: 70-100, 🟡 yellow: 40-69, 🔴 red: 0-39)
+- **Multiline Titles**: Article titles can display up to 3 lines for better readability
+- **Fast Video Loading**: Range request support with `preload="metadata"` for instant playback
+- **Local Video Streaming**: All pages use `/api/articles/:articleId.mp4` endpoint with range support
+
+### Dark Mode Everywhere
+- **Consistent Theme**: Dashboard, article pages, scene viewer, and prompts page all use dark mode
+- **Modern Colors**: `#0f1419` background, `#1d9bf0` accents, `#e7e9ea` text
+- **Better Readability**: Reduced eye strain for long viewing sessions
+
+### Markdown Rendering
+- **Proper Formatting**: Article pages now render markdown correctly (bold, italic, links)
+- **Fixed Multiline Links**: Links split across multiple lines are properly normalized
+- **Uses marked.js**: Client-side rendering for fast, clean display
+
+### Interactive Features
+- **Buttons Hide Immediately**: Action buttons disappear on click, show spinners
+- **Real-time Status**: Polling shows operation status every 3 seconds
+- **No Duplicate Actions**: Flag system prevents double-clicking
+
+---
+
+## 🔄 Queue System & Background Processing
+
+### Persistent Queues
+Location: `data/queues/` (survives Docker restarts)
+
+**Four Queue Types:**
+- 📥 **Fetch Queue**: Article fetching operations
+- 🎬 **Describe Queue**: Scene description tasks
+- ⭐ **Rate Queue**: Article rating operations  
+- 🧠 **FPO Queue**: Prompt optimization runs
+
+**Features:**
+- Persists across Docker restarts (stored in `data/queues/*.json`)
+- Only 1 action of each type runs at once, others wait in queue
+- Up to 4 actions run simultaneously (1 of each type)
+- Auto-retry failed items (max 3 attempts)
+- Status: `queued` → `processing` → `complete`
+
+**View Queue Status:**
+```bash
+# Show all queues and flags
+./scripts/status.sh
+
+# Watch mode (refresh every 3s)
+./scripts/status.sh --watch
+
+# Check via API
+curl https://api.reels.hurated.com/api/queue/status | jq .
+```
+
+### Flag System
+Location: `/tmp/prompt-reels-flags/` (cleared on Docker restart)
+
+**Features:**
+- Prevents duplicate operations
+- Shows UI feedback (spinners)
+- Cleared automatically on completion or restart
+
+---
+
+## 🚀 Automatic FPO Optimization
+
+### Runs Automatically
+FPO now runs **automatically** when you rate articles. No manual intervention needed!
+
+**What Happens:**
+1. Article is rated (match score calculated)
+2. FPO automatically triggered
+3. All 5 prompts evaluated on article frames vs article text
+4. Scores saved to `performance[]` arrays
+5. Prompts ranked by semantic similarity
+
+### Manual FPO Button
+Prompts page has a manual trigger at https://reels.hurated.com/prompts
+
+Click **"🚀 Run FPO Iteration"** button to:
+- Use described articles (13+ available)
+- Evaluate all prompts on actual frames
+- Compare to article text (first 500 chars)
+- Calculate semantic similarity scores
+- Update `data/prompts.json`
+
+**No more "No test data available"!** ✅
+
+---
+
+## 📊 Video Optimization & Performance
+
+### Range Request Support
+All video endpoints support HTTP range requests for instant playback:
+
+```bash
+GET /api/articles/:articleId.mp4
+# Supports: Range: bytes=0-1048575
+# Returns: 206 Partial Content
+```
+
+**Benefits:**
+- ✅ Instant video preview (loads metadata only ~100KB)
+- ✅ Fast seeking without full download
+- ✅ Reduced bandwidth usage
+- ✅ Dashboard videos load in <1 second
+
+### Whisper Rate Limiting
+Audio transcription respects API limits:
+- Proactive: 3 requests/minute (20s between calls)
+- Prevents 429 errors before they happen
+- Clear logging of wait times
 
 ---
 

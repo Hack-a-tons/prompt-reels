@@ -4,9 +4,10 @@
 
 A self-improving video analysis system with **scene detection**, **AI-powered descriptions**, **news article fetching**, and **federated prompt optimization (FPO)** with genetic evolution. Fully deployed on production.
 
-**Last Updated**: January 12, 2025  
+**Last Updated**: January 12, 2025 (Evening Update)  
 **Repository**: `git@github.com:Hack-a-tons/prompt-reels.git`  
-**Production**: https://api.reels.hurated.com  
+**Production**: https://reels.hurated.com  
+**API**: https://api.reels.hurated.com  
 **Port**: 15000
 
 ---
@@ -44,13 +45,14 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 
 ### Scripts & Automation
 - [x] `upload.sh` - Upload videos to API
-- [x] `list.sh` - List uploaded videos OR articles (with targets)
+- [x] `list.sh` - **FIXED:** List videos/articles (now finds article-*.mp4)
 - [x] `detect-scenes.sh` - Fast scene timestamp detection
 - [x] `describe-scenes.sh` - Extract frames + AI descriptions
 - [x] `detected.sh` - Show scene detection status
-- [x] `fetch-news.sh` - **NEW:** Fetch news articles with videos
+- [x] `fetch-news.sh` - Fetch news articles with videos
+- [x] `status.sh` - **NEW:** Monitor queues, flags, and processing status
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
-- [x] `cleanup.sh` - **UPDATED:** Clean with targets (all/articles/output/uploads/prompts)
+- [x] `cleanup.sh` - Clean with targets (all/articles/output/uploads/prompts)
 - [x] `evolve.sh` - Manage FPO evolution (start/stop/status)
 - [x] `show-prompts.sh` - Display prompt templates
 - [x] `reset-prompts.sh` - Reset prompts to default state
@@ -75,6 +77,41 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] Auto-highlight current scene during playback
 - [x] Responsive mobile-friendly design
 - [x] Modern gradient UI with smooth animations
+- [x] Dark mode throughout (consistent theme)
+
+### UI/UX Improvements (Latest)
+- [x] **Dashboard video thumbnails** - Auto-playing 160x90px previews
+- [x] **Score color coding** - Red/yellow/green for match scores
+- [x] **Multiline titles** - Up to 3 lines for better readability
+- [x] **Markdown rendering** - Proper formatting on article pages
+- [x] **Fixed multiline links** - Links normalize correctly
+- [x] **Dark mode everywhere** - Consistent across all pages
+- [x] **Buttons hide immediately** - On click, shows spinners
+- [x] **Bigger FPO button** - Prominent "Run FPO Iteration" button
+
+### Queue & Background Processing
+- [x] **Persistent queue system** - Survives Docker restarts (data/queues/)
+- [x] **Four queue types** - Fetch, Describe, Rate, FPO
+- [x] **Concurrent processing** - Up to 4 workers (1 per type)
+- [x] **Auto-retry** - Failed items retry up to 3 times
+- [x] **Queue status API** - GET /api/queue/status
+- [x] **status.sh script** - Monitor queues and flags
+- [x] **Flag system** - Prevents duplicate operations (/tmp/prompt-reels-flags/)
+
+### Video Optimization
+- [x] **Range request support** - HTTP 206 Partial Content
+- [x] **Fast video loading** - preload="metadata" strategy
+- [x] **Video streaming endpoint** - /api/articles/:articleId.mp4
+- [x] **Local video playback** - All pages use downloaded videos
+- [x] **Whisper rate limiting** - 3 req/min, proactive waiting
+
+### FPO Improvements
+- [x] **Automatic FPO on rating** - Runs when articles rated
+- [x] **Manual FPO button** - On prompts page
+- [x] **Uses real article data** - No more "No test data available"
+- [x] **Finds described articles** - 13+ articles with frames
+- [x] **Semantic similarity scoring** - Real scores, not 0.0000
+- [x] **Fixed test data lookup** - Uses article-*_frames/ structure
 
 ---
 
@@ -92,6 +129,12 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 | GET | `/api/results/:videoId` | Get analysis results | ✅ |
 | POST | `/api/fpo/run` | Run FPO optimization | ✅ |
 | GET | `/api/fpo/status` | Get FPO status & weights | ✅ |
+| GET | `/api/flags/status` | Get flag status (temp locks) | ✅ |
+| GET | `/api/queue/status` | Get queue status (persistent) | ✅ |
+| GET | `/api/articles/:id.mp4` | Stream video with range support | ✅ |
+| GET | `/prompts` | Prompts optimization history page | ✅ |
+| GET | `/articles/:id` | Article detail page with markdown | ✅ |
+| GET | `/` | Dashboard with video thumbnails | ✅ |
 
 ---
 
