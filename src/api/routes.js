@@ -441,15 +441,15 @@ router.get('/scenes/:videoId', (req, res) => {
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f5f5f5;
-      color: #333;
+      background: #0f1419;
+      color: #e7e9ea;
     }
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
       color: white;
       padding: 30px 20px;
       text-align: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
       position: relative;
     }
     .back-link {
@@ -480,15 +480,16 @@ router.get('/scenes/:videoId', (req, res) => {
       padding: 20px;
     }
     .video-player {
-      background: white;
+      background: #16181c;
       border-radius: 12px;
       padding: 20px;
       margin-bottom: 30px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      border: 1px solid #2f3336;
     }
     .video-player h2 {
       margin-bottom: 15px;
-      color: #667eea;
+      color: #1d9bf0;
     }
     video {
       width: 100%;
@@ -503,7 +504,8 @@ router.get('/scenes/:videoId', (req, res) => {
       flex-wrap: wrap;
     }
     .stat {
-      background: #f8f9fa;
+      background: #16181c;
+      border: 1px solid #2f3336;
       padding: 15px 20px;
       border-radius: 8px;
       flex: 1;
@@ -511,20 +513,21 @@ router.get('/scenes/:videoId', (req, res) => {
     }
     .stat-label {
       font-size: 0.85em;
-      color: #666;
+      color: #71767b;
       margin-bottom: 5px;
     }
     .stat-value {
       font-size: 1.5em;
       font-weight: bold;
-      color: #667eea;
+      color: #1d9bf0;
     }
     .scenes-grid {
       display: grid;
       gap: 20px;
     }
     .scene {
-      background: white;
+      background: #16181c;
+      border: 1px solid #2f3336;
       border-radius: 12px;
       padding: 20px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -540,29 +543,29 @@ router.get('/scenes/:videoId', (req, res) => {
       align-items: center;
       margin-bottom: 15px;
       padding-bottom: 15px;
-      border-bottom: 2px solid #f0f0f0;
+      border-bottom: 2px solid #2f3336;
     }
     .scene-title {
       font-size: 1.3em;
       font-weight: bold;
-      color: #667eea;
+      color: #1d9bf0;
     }
     .scene-time {
       font-size: 0.9em;
-      color: #666;
-      background: #f8f9fa;
+      color: #e7e9ea;
+      background: #2f3336;
       padding: 5px 12px;
       border-radius: 20px;
       cursor: pointer;
       transition: background 0.2s;
     }
     .scene-time:hover {
-      background: #667eea;
+      background: #1d9bf0;
       color: white;
     }
     .scene-duration {
       font-size: 0.85em;
-      color: #999;
+      color: #71767b;
       margin-left: 10px;
     }
     .frames-container {
@@ -575,7 +578,8 @@ router.get('/scenes/:videoId', (req, res) => {
       position: relative;
       border-radius: 8px;
       overflow: hidden;
-      background: #f0f0f0;
+      background: #0f1419;
+      border: 1px solid #2f3336;
     }
     .frame img {
       width: 100%;
@@ -599,17 +603,32 @@ router.get('/scenes/:videoId', (req, res) => {
     .description {
       margin-top: 15px;
       padding: 15px;
-      background: #f8f9fa;
-      border-left: 4px solid #667eea;
+      background: #0f1419;
+      border-left: 4px solid #1d9bf0;
       border-radius: 4px;
       font-size: 0.95em;
       line-height: 1.6;
-      color: #555;
+      color: #e7e9ea;
+    }
+    .transcript {
+      margin-top: 15px;
+      padding: 15px;
+      background: #0f1419;
+      border-left: 4px solid #10b981;
+      border-radius: 4px;
+      font-size: 0.95em;
+      line-height: 1.6;
+      color: #e7e9ea;
+    }
+    .transcript-label {
+      font-weight: bold;
+      color: #10b981;
+      margin-bottom: 8px;
     }
     .no-frames {
       text-align: center;
       padding: 40px;
-      color: #999;
+      color: #71767b;
       font-style: italic;
     }
     @media (max-width: 768px) {

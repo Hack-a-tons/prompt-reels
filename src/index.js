@@ -125,16 +125,15 @@ app.get('/', (req, res) => {
             text-align: left;
             border-bottom: 1px solid #2f3336;
         }
-        .thumbnail {
-            width: 120px;
-            height: 68px;
-            object-fit: cover;
+        .video-preview {
+            width: 160px;
+            height: 90px;
             border-radius: 6px;
             background: #0f1419;
         }
-        .no-thumbnail {
-            width: 120px;
-            height: 68px;
+        .no-video {
+            width: 160px;
+            height: 90px;
             background: #2f3336;
             border-radius: 6px;
             display: flex;
@@ -188,8 +187,10 @@ app.get('/', (req, res) => {
         }
         .score {
             font-weight: bold;
-            color: #10b981;
         }
+        .score.high { color: #10b981; }
+        .score.medium { color: #f59e0b; }
+        .score.low { color: #ef4444; }
     </style>
 </head>
 <body>
@@ -246,15 +247,23 @@ app.get('/', (req, res) => {
             </thead>
             <tbody>
                 ${articles.map(article => {
-                    // Get thumbnail from first scene frame
-                    let thumbnailHtml = '<div class="no-thumbnail">No preview</div>';
-                    if (article.sceneCount && article.sceneCount > 0) {
-                        const thumbnailPath = `/output/${article.articleId}_frames/scene-1/frame-1.jpg`;
-                        thumbnailHtml = `<img src="${thumbnailPath}" class="thumbnail" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="no-thumbnail" style="display:none;">No preview</div>`;
+                    // Get video player for preview
+                    let videoHtml = '<div class="no-video">No video</div>';
+                    if (article.hasLocalVideo) {
+                        const videoPath = `/uploads/articles/${article.articleId}.mp4`;
+                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${videoPath}" type="video/mp4"></video>`;
                     }
+                    
+                    // Score coloring: high (>70) = green, medium (40-70) = yellow, low (<40) = red
+                    let scoreClass = 'high';
+                    if (article.matchScore) {
+                        if (article.matchScore < 40) scoreClass = 'low';
+                        else if (article.matchScore < 70) scoreClass = 'medium';
+                    }
+                    
                     return `
                 <tr>
-                    <td>${thumbnailHtml}</td>
+                    <td>${videoHtml}</td>
                     <td>
                         <div class="title">
                             <a href="/articles/${article.articleId}">${article.title}</a>
@@ -267,7 +276,7 @@ app.get('/', (req, res) => {
                         ${article.hasLocalVideo ? ' ✓' : ''}
                     </td>
                     <td>${article.sceneCount || '-'}</td>
-                    <td>${article.matchScore ? `<span class="score">${article.matchScore}</span>` : '-'}</td>
+                    <td>${article.matchScore ? `<span class="score ${scoreClass}">${article.matchScore}</span>` : '-'}</td>
                     <td>${new Date(article.fetchedAt).toLocaleString()}</td>
                     <td class="actions">
                         ${article.status === 'fetched' && article.hasLocalVideo ? 
@@ -398,44 +407,17 @@ app.get('/articles/:articleId', (req, res) => {
   
   const hasLocalVideo = !!article.video.localPath;
   
-  // Simple text formatter (handles newlines and basic markdown)
-  const formatText = (text) => {
+  // Escape HTML for safe inclusion in JavaScript string
+  const escapeHtml = (text) => {
     if (!text) return '';
-    
-    let formatted = text;
-    
-    // Convert markdown headers (must be done before escaping HTML)
-    formatted = formatted.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    formatted = formatted.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    formatted = formatted.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-    
-    // Convert bold and italic (do before escaping to avoid issues)
-    formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    
-    // Convert inline code
-    formatted = formatted.replace(/`(.+?)`/g, '<code>$1</code>');
-    
-    // Convert links [text](url)
-    formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    
-    // Now escape any remaining HTML that's not part of our tags
-    // This is a simplified approach - in production you'd want better HTML sanitization
-    formatted = formatted.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
-    
-    // Split into paragraphs (double newline)
-    const paragraphs = formatted.split(/\n\n+/);
-    
-    return paragraphs.map(para => {
-      // If already a header, return as-is
-      if (para.trim().startsWith('<h')) {
-        return para.trim();
-      }
-      // Convert single newlines to <br>
-      const withBreaks = para.replace(/\n/g, '<br>');
-      // Wrap in paragraph if not empty
-      return withBreaks.trim() ? `<p>${withBreaks.trim()}</p>` : '';
-    }).join('\n');
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '\\r');
   };
   
   const html = `
@@ -445,6 +427,7 @@ app.get('/articles/:articleId', (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${article.title} - Prompt Reels</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -687,14 +670,14 @@ app.get('/articles/:articleId', (req, res) => {
         ${article.description ? `
         <div class="content-section">
             <h2>Description</h2>
-            <div class="description">${formatText(article.description)}</div>
+            <div class="description" id="description-content"></div>
         </div>
         ` : ''}
         
         ${article.text && article.text !== article.description ? `
         <div class="content-section">
             <h2>Full Article Text</h2>
-            <div class="description">${formatText(article.text.substring(0, 2000))}${article.text.length > 2000 ? '...' : ''}</div>
+            <div class="description" id="text-content"></div>
         </div>
         ` : ''}
         
@@ -725,6 +708,20 @@ app.get('/articles/:articleId', (req, res) => {
     </div>
     
     <script>
+        // Render markdown content
+        const descriptionEl = document.getElementById('description-content');
+        const textEl = document.getElementById('text-content');
+        
+        if (descriptionEl) {
+            const description = '${escapeHtml(article.description)}';
+            descriptionEl.innerHTML = marked.parse(description);
+        }
+        
+        if (textEl) {
+            const text = '${escapeHtml(article.text.substring(0, 2000))}';
+            textEl.innerHTML = marked.parse(text) + ${article.text.length > 2000 ? '"..."' : '""'};
+        }
+        
         async function describeArticle() {
             if (!confirm('Describe scenes for this article? This may take a few minutes.')) return;
             
@@ -773,18 +770,32 @@ app.get('/prompts', (req, res) => {
   try {
     const prompts = loadPrompts();
     
-    // Get the two main prompts
-    const scenePrompt = prompts['video-scene-description'] || {};
-    const matchPrompt = prompts['video-article-match'] || {};
+    // Handle old format: prompts.templates array
+    // Convert to versions format for display
+    const templates = prompts.templates || [];
+    
+    // Group templates into two categories for display
+    const sceneVersions = templates.map((t, index) => ({
+      version: `1.${index}`,
+      template: t.template,
+      performance: {
+        avgScore: t.performance && t.performance.length > 0 
+          ? t.performance.reduce((sum, p) => sum + p.score, 0) / t.performance.length 
+          : 0,
+        samples: t.performance ? t.performance.length : 0
+      },
+      createdAt: new Date().toISOString(),
+      isActive: index === 0
+    })).filter(v => v.performance.samples > 0);
+    
+    const matchVersions = []; // Not yet implemented in this JSON structure
     
     // Sort versions by performance (best first)
-    const sortedSceneVersions = (scenePrompt.versions || [])
-      .filter(v => v.performance && v.performance.avgScore !== undefined)
-      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    const sortedSceneVersions = sceneVersions.sort((a, b) => 
+      (b.performance.avgScore || 0) - (a.performance.avgScore || 0)
+    );
     
-    const sortedMatchVersions = (matchPrompt.versions || [])
-      .filter(v => v.performance && v.performance.avgScore !== undefined)
-      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    const sortedMatchVersions = matchVersions;
     
     const html = `
 <!DOCTYPE html>
@@ -995,7 +1006,7 @@ app.get('/prompts', (req, res) => {
                 </div>
             ` : sortedSceneVersions.map((version, index) => {
                 const isBest = index === 0;
-                const isCurrent = version.version === scenePrompt.currentVersion;
+                const isCurrent = version.isActive;
                 const score = version.performance.avgScore || 0;
                 const samples = version.performance.samples || 0;
                 const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
@@ -1039,7 +1050,7 @@ app.get('/prompts', (req, res) => {
                 </div>
             ` : sortedMatchVersions.map((version, index) => {
                 const isBest = index === 0;
-                const isCurrent = version.version === matchPrompt.currentVersion;
+                const isCurrent = version.isActive;
                 const score = version.performance.avgScore || 0;
                 const samples = version.performance.samples || 0;
                 const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
