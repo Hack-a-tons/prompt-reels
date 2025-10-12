@@ -137,16 +137,47 @@ npm run reset-prompts     # Reset prompts.json to clean template
 ```
 **Note:** `data/prompts.json` accumulates performance history during FPO runs. Reset it before committing if you want a clean state.
 
+### Cleanup (clear outputs and uploads)
+```bash
+# Interactive (with confirmation)
+./scripts/cleanup.sh
+
+# Auto-confirm
+./scripts/cleanup.sh -y
+
+# Keep prompts data (don't reset)
+./scripts/cleanup.sh -y -k
+```
+**Removes:**
+- `output/*` - All analysis results, scene data, logs
+- `uploads/*` - All uploaded videos
+- `data/prompts.json` - Reset to original (unless `-k`)
+
 ### Production Deployment
 ```bash
-# Using Docker Compose
+# Quick deploy with commit
+./scripts/deploy.sh -m "Your commit message"
+
+# Deploy without committing (push existing commits)
+./scripts/deploy.sh -s
+
+# Deploy without rebuilding (faster)
+./scripts/deploy.sh -b
+
+# Manual Docker Compose
 docker compose up -d      # Start in detached mode
 docker compose logs -f    # View logs
 docker compose down       # Stop
-
-# Domain: reels.hurated.com
-# Port: 15000 (mapped internally)
 ```
+
+**Deploy script does:**
+1. Check git status
+2. Commit changes (if `-m` provided)
+3. Push to GitHub
+4. SSH to reels.hurated.com
+5. Pull latest changes
+6. Rebuild & restart container
+7. Show logs & health check
 
 **Nginx Configuration:**  
 See `nginx.conf.example` for full configuration. The main domain `reels.hurated.com` proxies to `localhost:15000`.
