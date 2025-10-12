@@ -86,6 +86,9 @@ show_status() {
     
     if [ $? -eq 0 ] && [ -n "$flags_response" ]; then
         batch_adding=$(echo "$flags_response" | jq -r '.batchAdding')
+        fpo_running=$(echo "$flags_response" | jq -r '.fpoRunning')
+        
+        active_flags=0
         
         if [ "$batch_adding" = "true" ]; then
             batch_data=$(echo "$flags_response" | jq -r '.batchAddingData')
@@ -93,7 +96,19 @@ show_status() {
             started=$(echo "$batch_data" | jq -r '.startedAt // "unknown"')
             echo -e "   ${YELLOW}⏳ Batch Adding${NC}: Adding $target articles"
             echo -e "      Started: $started"
-        else
+            active_flags=$((active_flags + 1))
+        fi
+        
+        if [ "$fpo_running" = "true" ]; then
+            fpo_data=$(echo "$flags_response" | jq -r '.fpoRunningData')
+            iterations=$(echo "$fpo_data" | jq -r '.iterations // "?"')
+            started=$(echo "$fpo_data" | jq -r '.startedAt // "unknown"')
+            echo -e "   ${PURPLE}🧠 FPO Running${NC}: $iterations iterations"
+            echo -e "      Started: $started"
+            active_flags=$((active_flags + 1))
+        fi
+        
+        if [ $active_flags -eq 0 ]; then
             echo -e "   ${GREEN}✓ No active flags${NC}"
         fi
     else

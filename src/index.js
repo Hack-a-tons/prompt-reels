@@ -1228,10 +1228,19 @@ app.get('/prompts', (req, res) => {
                     body: JSON.stringify({ iterations: 1 })
                 });
                 
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || 'FPO request failed');
+                }
+                
                 const data = await res.json();
                 
                 if (data.success) {
-                    alert(\`FPO Complete!\\n\\nIterations: \${data.iterations}\\nFinal Prompt: \${data.finalPrompt}\\nEvolved: \${data.evolved} new prompts\`);
+                    const message = 'FPO Complete!\\n\\n' +
+                        'Iterations: ' + data.iterations + '\\n' +
+                        'Final Prompt: ' + data.finalPrompt + '\\n' +
+                        'Evolved: ' + data.evolved + ' new prompts';
+                    alert(message);
                     location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));

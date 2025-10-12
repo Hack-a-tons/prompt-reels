@@ -298,12 +298,25 @@ router.get('/results/:videoId', (req, res) => {
  * Run Federated Prompt Optimization
  */
 router.post('/fpo/run', async (req, res) => {
+  const { setFlag, clearFlag, hasFlag } = require('../utils/flags');
+  
   try {
+    // Check if FPO already running
+    if (hasFlag('fpo-running')) {
+      return res.status(409).json({ error: 'FPO optimization already in progress' });
+    }
+    
     const { 
       iterations = 3,
       enableEvolution = true,
       evolutionInterval = 2,
     } = req.body;
+    
+    // Set flag
+    setFlag('fpo-running', { 
+      iterations,
+      startedAt: new Date().toISOString() 
+    });
     
     // Find actual article frames to use for testing
     // Use frames from processed articles with actual article text as reference
@@ -364,6 +377,10 @@ router.post('/fpo/run', async (req, res) => {
     }
 
     const lastResult = results[results.length - 1];
+    
+    // Clear flag
+    clearFlag('fpo-running');
+    
     res.json({
       success: true,
       iterations: results.length,
@@ -374,6 +391,10 @@ router.post('/fpo/run', async (req, res) => {
     });
   } catch (error) {
     console.error('FPO error:', error);
+    
+    // Clear flag on error
+    clearFlag('fpo-running');
+    
     res.status(500).json({ error: error.message });
   }
 });
@@ -1440,6 +1461,8 @@ router.get('/flags/status', (req, res) => {
   res.json({
     batchAdding: hasFlag('batch-adding'),
     batchAddingData: getFlag('batch-adding'),
+    fpoRunning: hasFlag('fpo-running'),
+    fpoRunningData: getFlag('fpo-running'),
   });
 });
 
