@@ -5,7 +5,7 @@
       "id": "baseline",
       "name": "Baseline Description",
       "template": "Describe what you see in this video frame in detail.",
-      "weight": -0.014999510455334137,
+      "weight": -0.0021497543634028046,
       "performance": [
         {
           "score": 0.017476683722776293,
@@ -22,6 +22,54 @@
         {
           "score": -0.014999510455334137,
           "timestamp": "2025-10-12T00:20:46.974Z"
+        },
+        {
+          "score": 0.013585146415646373,
+          "timestamp": "2025-10-12T01:06:25.995Z"
+        },
+        {
+          "score": 0.02822685683775555,
+          "timestamp": "2025-10-12T01:07:58.676Z"
+        },
+        {
+          "score": 0.024463785215808595,
+          "timestamp": "2025-10-12T01:09:36.062Z"
+        },
+        {
+          "score": -0.016867929999844624,
+          "timestamp": "2025-10-12T01:19:38.038Z"
+        },
+        {
+          "score": 0.0007903935186159896,
+          "timestamp": "2025-10-12T01:20:55.882Z"
+        },
+        {
+          "score": -0.020332890506229457,
+          "timestamp": "2025-10-12T01:22:16.278Z"
+        },
+        {
+          "score": -0.005021059530283581,
+          "timestamp": "2025-10-12T01:25:48.442Z"
+        },
+        {
+          "score": -0.02758429462077994,
+          "timestamp": "2025-10-12T01:26:54.145Z"
+        },
+        {
+          "score": 0.033320003584864026,
+          "timestamp": "2025-10-12T01:27:57.558Z"
+        },
+        {
+          "score": -0.013651563615827303,
+          "timestamp": "2025-10-12T02:16:13.837Z"
+        },
+        {
+          "score": 0.008097463077816091,
+          "timestamp": "2025-10-12T02:18:26.504Z"
+        },
+        {
+          "score": -0.0021497543634028046,
+          "timestamp": "2025-10-12T02:20:15.577Z"
         }
       ]
     },
@@ -29,7 +77,7 @@
       "id": "structured",
       "name": "Structured Analysis",
       "template": "Analyze this video frame and provide: 1) Main subjects, 2) Actions occurring, 3) Setting/environment, 4) Notable details.",
-      "weight": -0.002252863329684026,
+      "weight": 0.022986851884394508,
       "performance": [
         {
           "score": 0.00029430322133235424,
@@ -46,6 +94,54 @@
         {
           "score": -0.002252863329684026,
           "timestamp": "2025-10-12T00:20:46.974Z"
+        },
+        {
+          "score": -0.010869092611921921,
+          "timestamp": "2025-10-12T01:06:25.995Z"
+        },
+        {
+          "score": -0.002242630361568078,
+          "timestamp": "2025-10-12T01:07:58.676Z"
+        },
+        {
+          "score": 0.019678339876735517,
+          "timestamp": "2025-10-12T01:09:36.062Z"
+        },
+        {
+          "score": -0.014264135615132451,
+          "timestamp": "2025-10-12T01:19:38.038Z"
+        },
+        {
+          "score": 0.0063000428520487055,
+          "timestamp": "2025-10-12T01:20:55.882Z"
+        },
+        {
+          "score": 0.02833908656155702,
+          "timestamp": "2025-10-12T01:22:16.278Z"
+        },
+        {
+          "score": 0.012109233100609318,
+          "timestamp": "2025-10-12T01:25:48.442Z"
+        },
+        {
+          "score": 0.008387626960303271,
+          "timestamp": "2025-10-12T01:26:54.145Z"
+        },
+        {
+          "score": -0.0026884149685576487,
+          "timestamp": "2025-10-12T01:27:57.558Z"
+        },
+        {
+          "score": 0.003537912754210328,
+          "timestamp": "2025-10-12T02:16:13.837Z"
+        },
+        {
+          "score": -0.019723756080919964,
+          "timestamp": "2025-10-12T02:18:26.504Z"
+        },
+        {
+          "score": 0.022986851884394508,
+          "timestamp": "2025-10-12T02:20:15.577Z"
         }
       ]
     },
@@ -53,7 +149,7 @@
       "id": "narrative",
       "name": "Narrative Style",
       "template": "Describe this scene as if you're narrating a story. What's happening, who's involved, and what's the context?",
-      "weight": 0.008294750277000202,
+      "weight": 0.0013417026970478977,
       "performance": [
         {
           "score": -0.013674971109730233,
@@ -70,6 +166,54 @@
         {
           "score": 0.008294750277000202,
           "timestamp": "2025-10-12T00:20:46.974Z"
+        },
+        {
+          "score": -0.014174657644837258,
+          "timestamp": "2025-10-12T01:06:25.995Z"
+        },
+        {
+          "score": 0.002665407218238748,
+          "timestamp": "2025-10-12T01:07:58.676Z"
+        },
+        {
+          "score": 0.0021663288107325405,
+          "timestamp": "2025-10-12T01:09:36.062Z"
+        },
+        {
+          "score": -0.009775199591005583,
+          "timestamp": "2025-10-12T01:19:38.038Z"
+        },
+        {
+          "score": -0.019833809346010284,
+          "timestamp": "2025-10-12T01:20:55.882Z"
+        },
+        {
+          "score": 0.008132839675787158,
+          "timestamp": "2025-10-12T01:22:16.278Z"
+        },
+        {
+          "score": 0.006982976187759962,
+          "timestamp": "2025-10-12T01:25:48.442Z"
+        },
+        {
+          "score": 0.007534405515251797,
+          "timestamp": "2025-10-12T01:26:54.145Z"
+        },
+        {
+          "score": -0.032276910529435605,
+          "timestamp": "2025-10-12T01:27:57.558Z"
+        },
+        {
+          "score": -0.010969119807160399,
+          "timestamp": "2025-10-12T02:16:13.837Z"
+        },
+        {
+          "score": -0.018168844195041018,
+          "timestamp": "2025-10-12T02:18:26.504Z"
+        },
+        {
+          "score": 0.0013417026970478977,
+          "timestamp": "2025-10-12T02:20:15.577Z"
         }
       ]
     },
@@ -77,7 +221,7 @@
       "id": "technical",
       "name": "Technical Details",
       "template": "Provide a technical description of this frame including: composition, lighting, subjects, actions, and any text visible.",
-      "weight": 0.013719937802855013,
+      "weight": 0.009624297328417526,
       "performance": [
         {
           "score": -0.002061526185137539,
@@ -94,6 +238,54 @@
         {
           "score": 0.013719937802855013,
           "timestamp": "2025-10-12T00:20:46.974Z"
+        },
+        {
+          "score": -0.019036995538723775,
+          "timestamp": "2025-10-12T01:06:25.995Z"
+        },
+        {
+          "score": -0.008437180772908894,
+          "timestamp": "2025-10-12T01:07:58.676Z"
+        },
+        {
+          "score": -0.006681556236961035,
+          "timestamp": "2025-10-12T01:09:36.062Z"
+        },
+        {
+          "score": -0.018396356645912656,
+          "timestamp": "2025-10-12T01:19:38.038Z"
+        },
+        {
+          "score": 0.011366272762845755,
+          "timestamp": "2025-10-12T01:20:55.882Z"
+        },
+        {
+          "score": -0.006862294259667345,
+          "timestamp": "2025-10-12T01:22:16.278Z"
+        },
+        {
+          "score": 0.016136296598342943,
+          "timestamp": "2025-10-12T01:25:48.442Z"
+        },
+        {
+          "score": 0.009625006719611168,
+          "timestamp": "2025-10-12T01:26:54.145Z"
+        },
+        {
+          "score": 0.012545793988280795,
+          "timestamp": "2025-10-12T01:27:57.558Z"
+        },
+        {
+          "score": 0.008362968386012207,
+          "timestamp": "2025-10-12T02:16:13.837Z"
+        },
+        {
+          "score": 0.014882610154082631,
+          "timestamp": "2025-10-12T02:18:26.504Z"
+        },
+        {
+          "score": 0.009624297328417526,
+          "timestamp": "2025-10-12T02:20:15.577Z"
         }
       ]
     },
@@ -101,7 +293,7 @@
       "id": "comprehensive",
       "name": "Comprehensive Analysis",
       "template": "Analyze this video frame comprehensively: describe the scene, identify all subjects and objects, explain what actions are taking place, note the setting and atmosphere, and mention any text or graphics visible.",
-      "weight": 0.018069081175257146,
+      "weight": -0.018436549505260368,
       "performance": [
         {
           "score": 0.0045525705097686844,
@@ -118,8 +310,74 @@
         {
           "score": 0.018069081175257146,
           "timestamp": "2025-10-12T00:20:46.974Z"
+        },
+        {
+          "score": 0.0067636650063884795,
+          "timestamp": "2025-10-12T01:06:25.995Z"
+        },
+        {
+          "score": 0.005136557339701591,
+          "timestamp": "2025-10-12T01:07:58.676Z"
+        },
+        {
+          "score": -0.012212690209179764,
+          "timestamp": "2025-10-12T01:09:36.062Z"
+        },
+        {
+          "score": 0.01584107322691659,
+          "timestamp": "2025-10-12T01:19:38.038Z"
+        },
+        {
+          "score": -0.011024480638746358,
+          "timestamp": "2025-10-12T01:20:55.882Z"
+        },
+        {
+          "score": 0.01568670244001937,
+          "timestamp": "2025-10-12T01:22:16.278Z"
+        },
+        {
+          "score": -0.004123631593646588,
+          "timestamp": "2025-10-12T01:25:48.442Z"
+        },
+        {
+          "score": -0.023973265899783592,
+          "timestamp": "2025-10-12T01:26:54.145Z"
+        },
+        {
+          "score": 0.010711605281306658,
+          "timestamp": "2025-10-12T01:27:57.558Z"
+        },
+        {
+          "score": 0.001995891810729808,
+          "timestamp": "2025-10-12T02:16:13.837Z"
+        },
+        {
+          "score": 0.0033978131083210127,
+          "timestamp": "2025-10-12T02:18:26.504Z"
+        },
+        {
+          "score": -0.018436549505260368,
+          "timestamp": "2025-10-12T02:20:15.577Z"
         }
       ]
+    },
+    {
+      "id": "evolved_gen1_mgn2rtrw",
+      "name": "Evolved Gen 1",
+      "template": "Describe in detail what you see in this video frame, including composition, lighting, subjects, actions, and any visible text.",
+      "weight": -0.03510438982545667,
+      "performance": [
+        {
+          "score": -0.03510438982545667,
+          "timestamp": "2025-10-12T02:20:15.577Z"
+        }
+      ],
+      "generation": 1,
+      "parents": [
+        "technical",
+        "baseline"
+      ],
+      "created": "2025-10-12T02:18:27.068Z"
     }
   ],
   "domains": [
@@ -127,5 +385,5 @@
     "sports",
     "reels"
   ],
-  "global_prompt": "comprehensive"
+  "global_prompt": "structured"
 }
