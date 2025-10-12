@@ -60,7 +60,45 @@ app.get('/', (req, res) => {
             padding: 20px;
         }
         .container { max-width: 1400px; margin: 0 auto; }
-        h1 { margin-bottom: 30px; font-size: 32px; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        h1 { font-size: 32px; margin: 0; }
+        .add-articles-btn {
+            background: #1d9bf0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 9999px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .add-articles-btn:hover:not(:disabled) {
+            background: #1a8cd8;
+        }
+        .add-articles-btn:disabled {
+            background: #2f3336;
+            color: #71767b;
+            cursor: not-allowed;
+        }
+        .add-articles-btn .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -138,7 +176,12 @@ app.get('/', (req, res) => {
 </head>
 <body>
     <div class="container">
-        <h1>📰 Prompt Reels - Article Dashboard</h1>
+        <div class="header">
+            <h1>🎬 Prompt Reels - Article Dashboard</h1>
+            <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()">
+                + Add 10 Articles
+            </button>
+        </div>
         
         <div class="stats">
             <div class="stat-card">
@@ -244,6 +287,47 @@ app.get('/', (req, res) => {
                 }
             } catch (err) {
                 alert('Error: ' + err.message);
+            }
+        }
+        
+        let isAddingArticles = false;
+        
+        async function addArticles() {
+            if (isAddingArticles) {
+                alert('Already adding articles. Please wait...');
+                return;
+            }
+            
+            const btn = document.getElementById('addArticlesBtn');
+            const originalText = btn.innerHTML;
+            
+            isAddingArticles = true;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Adding articles...';
+            
+            try {
+                const res = await fetch('/api/articles/batch-add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count: 10 })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert(\`Success! Added \${data.added} new articles (checked \${data.attempts} total)\`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    isAddingArticles = false;
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                isAddingArticles = false;
             }
         }
     </script>

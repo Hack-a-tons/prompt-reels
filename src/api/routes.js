@@ -857,6 +857,168 @@ router.get('/dashboard', (req, res) => {
 });
 
 /**
+ * POST /api/articles/batch-add
+ * Add multiple articles (fetch, describe, rate) until target count is reached
+ */
+router.post('/articles/batch-add', async (req, res) => {
+  try {
+    const targetCount = req.body.count || 10;
+    
+    if (targetCount < 1 || targetCount > 100) {
+      return res.status(400).json({ error: 'Count must be between 1 and 100' });
+    }
+    
+    const initialCount = listArticles().length;
+    let attempts = 0;
+    let added = 0;
+    const maxAttempts = targetCount * 10; // Allow 10x attempts for duplicates/errors
+    
+    console.log(`\n📦 Batch add: targeting ${targetCount} new articles`);
+    console.log(`Initial count: ${initialCount}`);
+    
+    while (added < targetCount && attempts < maxAttempts) {
+      attempts++;
+      const beforeCount = listArticles().length;
+      
+      try {
+        console.log(`[Attempt ${attempts}] Fetching article... (${added}/${targetCount} added)`);
+        
+        // Fetch article
+        const article = await fetchNewsArticle();
+        
+        if (!article || !article.articleId) {
+          console.log('No article returned, skipping...');
+          continue;
+        }
+        
+        const afterFetch = listArticles().length;
+        
+        // Check if article was actually added (not a duplicate)
+        if (afterFetch <= beforeCount) {
+          console.log('Article was duplicate, skipping...');
+          continue;
+        }
+        
+        console.log(`✓ Article added: ${article.articleId}`);
+        added++;
+        
+        // Describe scenes (if video exists)
+        if (article.video.localPath) {
+          try {
+            console.log(`  Describing scenes...`);
+            const fullVideoPath = path.join(process.cwd(), article.video.localPath);
+            const threshold = 0.3;
+            const scenes = await detectScenes(fullVideoPath, threshold);
+            const scenesDir = path.join(config.outputDir, `${article.articleId}_frames`);
+            const scenesWithFrames = await extractSceneFrames(fullVideoPath, scenes, scenesDir);
+            
+            // Describe each scene
+            for (let scene of scenesWithFrames) {
+              if (scene.frames && scene.frames.length > 0) {
+                const framePaths = scene.frames.map(f => f.path);
+                const description = await describeScene(
+                  framePaths,
+                  scene.sceneId,
+                  scene.start,
+                  scene.end
+                );
+                scene.description = description;
+              }
+              
+              // Transcribe audio
+              const transcript = await transcribeSceneAudio(
+                fullVideoPath,
+                scene.sceneId,
+                scene.start,
+                scene.end,
+                scenesDir
+              );
+              
+              if (transcript) {
+                scene.transcript = transcript;
+              }
+            }
+            
+            // Save scene data
+            const sceneData = {
+              articleId: article.articleId,
+              videoId: article.articleId,
+              videoPath: article.video.localPath,
+              sceneCount: scenes.length,
+              threshold,
+              detectedAt: new Date().toISOString(),
+              scenes: scenesWithFrames,
+            };
+            
+            const scenesPath = path.join(config.outputDir, `${article.articleId}_scenes.json`);
+            fs.writeFileSync(scenesPath, JSON.stringify(sceneData, null, 2));
+            linkArticleToScenes(article.articleId, article.articleId, scenes.length);
+            
+            console.log(`  ✓ Scenes described: ${scenes.length}`);
+            
+            // Rate video-article match
+            console.log(`  Rating match...`);
+            const articleDetails = getArticleDetails(article.articleId);
+            const articleText = articleDetails.text || articleDetails.description;
+            const sceneAnalysis = scenesWithFrames
+              .map(s => {
+                let analysis = '';
+                if (s.description) analysis += `Visual: ${s.description}`;
+                if (s.transcript) analysis += `\nDialogue: "${s.transcript.text}"`;
+                return analysis;
+              })
+              .filter(a => a)
+              .join('\n\n');
+            
+            const ratingPrompt = `Rate how well this video matches the article on a scale of 0-100.
+
+Article Title: ${articleDetails.title}
+
+Article Text:
+${articleText.substring(0, 1000)}${articleText.length > 1000 ? '...' : ''}
+
+Video Analysis (${scenes.length} scenes):
+${sceneAnalysis.substring(0, 1500)}${sceneAnalysis.length > 1500 ? '...' : ''}
+
+Provide a rating (0-100) and brief explanation.
+Format: RATING: [number]
+EXPLANATION: [text]`;
+            
+            const rating = await describeImage(scenesWithFrames[0]?.frames[0]?.path || '', ratingPrompt);
+            const ratingMatch = rating.match(/RATING:\s*(\d+)/i);
+            const matchScore = ratingMatch ? parseInt(ratingMatch[1]) : 50;
+            
+            rateArticleMatch(article.articleId, matchScore, rating);
+            console.log(`  ✓ Match rated: ${matchScore}/100`);
+            
+          } catch (error) {
+            console.error(`  Error processing article: ${error.message}`);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`Error in batch add attempt ${attempts}: ${error.message}`);
+      }
+    }
+    
+    const finalCount = listArticles().length;
+    console.log(`\n✓ Batch add complete: ${added} articles added in ${attempts} attempts`);
+    console.log(`Final count: ${finalCount}\n`);
+    
+    res.json({
+      success: true,
+      added,
+      attempts,
+      initialCount,
+      finalCount,
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/articles/:articleId/describe
  * Describe article video (detect and describe scenes)
  */
