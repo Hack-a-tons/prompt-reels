@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Environment variables
 .env
@@ -17,6 +16,7 @@ output/
 *.json
 !data/*.json
 !package.json
+!package-lock.json
 
 # Logs
 logs/
