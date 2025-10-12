@@ -223,13 +223,36 @@ EOF
     fi
     
     success=$(echo "$response" | jq -r '.success')
+    queued=$(echo "$response" | jq -r '.queued // false')
     
-    if [ "$success" = "true" ]; then
+    if [ "$success" = "true" ] && [ "$queued" = "true" ]; then
+        job_id=$(echo "$response" | jq -r '.jobId')
+        position=$(echo "$response" | jq -r '.position')
+        message=$(echo "$response" | jq -r '.message')
+        
+        echo -e "${GREEN}✓ Job queued successfully!${NC}"
+        echo -e "${BLUE}Job ID:${NC} $job_id"
+        echo -e "${BLUE}Position:${NC} $position"
+        echo -e "${GRAY}$message${NC}"
+        echo ""
+        
+        echo -e "${YELLOW}Job is running in the background.${NC}"
+        echo -e "${GRAY}This will take approximately $(($ITERATIONS * 2)) minutes.${NC}"
+        echo ""
+        
+        echo -e "${YELLOW}Monitor progress:${NC}"
+        echo -e "  ./scripts/status.sh           # Check queue status"
+        echo -e "  ./scripts/evolve.sh status    # View final results when complete"
+        echo ""
+        
+        echo -e "${GRAY}The FPO job will continue running even if you close this terminal.${NC}"
+    elif [ "$success" = "true" ]; then
+        # Old synchronous response (shouldn't happen anymore)
         echo -e "${GREEN}✓ Evolution completed!${NC}"
         echo ""
         
-        iterations_done=$(echo "$response" | jq -r '.iterations')
-        final_prompt=$(echo "$response" | jq -r '.finalPrompt')
+        iterations_done=$(echo "$response" | jq -r '.iterations // 0')
+        final_prompt=$(echo "$response" | jq -r '.finalPrompt // "N/A"')
         evolved_count=$(echo "$response" | jq -r '.evolved // 0')
         generation=$(echo "$response" | jq -r '.generation // 0')
         
@@ -242,7 +265,6 @@ EOF
         
         echo -e "${YELLOW}View detailed results:${NC}"
         echo -e "  ./scripts/evolve.sh status $ENVIRONMENT"
-        echo -e "  ./scripts/show-prompts.sh $ENVIRONMENT"
     else
         echo -e "${RED}✗ Evolution failed${NC}"
         error=$(echo "$response" | jq -r '.error // "Unknown error"')

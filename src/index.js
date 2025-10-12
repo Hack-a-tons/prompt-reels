@@ -1366,6 +1366,36 @@ app.use((err, req, res, next) => {
   });
 });
 
+/**
+ * Start background queue processing
+ * Processes queued jobs every 5 seconds
+ */
+const startQueueProcessing = () => {
+  const { processQueues } = require('./utils/queue');
+  const { processFPOJob } = require('./workers/fpoWorker');
+  
+  const processors = {
+    fpo: processFPOJob,
+    // Add other processors here as needed
+    // fetch: processFetchJob,
+    // describe: processDescribeJob,
+    // rate: processRateJob,
+  };
+  
+  // Process queues every 5 seconds
+  setInterval(async () => {
+    try {
+      await processQueues(processors);
+    } catch (error) {
+      console.error('Queue processing error:', error.message);
+    }
+  }, 5000); // Check every 5 seconds
+  
+  // Also process immediately on startup
+  processQueues(processors).catch(err => {
+    console.error('Initial queue processing error:', err.message);
+  });
+};
 
 const startServer = async () => {
   const { log } = require('./utils/logger');
@@ -1374,6 +1404,10 @@ const startServer = async () => {
     // Initialize Weave logging
     await initWeave();
     log.info('Weave initialized');
+    
+    // Start background queue processing
+    startQueueProcessing();
+    log.info('Queue processing started');
 
     // Start server
     server = app.listen(config.port, () => {

@@ -295,111 +295,57 @@ router.get('/results/:videoId', (req, res) => {
 
 /**
  * POST /api/fpo/run
- * Run Federated Prompt Optimization
+ * Queue Federated Prompt Optimization job
  */
 router.post('/fpo/run', async (req, res) => {
-  const { setFlag, clearFlag, hasFlag } = require('../utils/flags');
+  const { enqueue, QUEUE_TYPES, getStatus } = require('../utils/queue');
   
   try {
-    // Check if FPO already running
-    if (hasFlag('fpo-running')) {
-      return res.status(409).json({ error: 'FPO optimization already in progress' });
-    }
-    
     const { 
       iterations = 3,
       enableEvolution = true,
       evolutionInterval = 2,
     } = req.body;
     
-    // Set flag
-    setFlag('fpo-running', { 
-      iterations,
-      startedAt: new Date().toISOString() 
-    });
-    
-    // Find described articles for testing
-    const { listArticles, getArticleDetails } = require('../core/articleWorkflow');
+    // Check for described articles before queueing
+    const { listArticles } = require('../core/articleWorkflow');
     const articles = listArticles();
     const describedArticles = articles.filter(a => a.status === 'described' || a.status === 'rated');
     
     if (describedArticles.length === 0) {
-      // Clear flag before throwing error
-      clearFlag('fpo-running');
       return res.status(400).json({ 
         error: 'No described articles found. Please describe some articles first.' 
       });
     }
     
-    console.log(`Found ${describedArticles.length} described articles for FPO testing`);
-    console.log(`Running ${iterations} iterations with random article selection for diversity`);
-
-    const results = [];
+    // Queue the FPO job
+    const jobId = `fpo-${Date.now()}`;
+    const position = enqueue(QUEUE_TYPES.FPO, {
+      id: jobId,
+      iterations,
+      enableEvolution,
+      evolutionInterval,
+    });
     
-    // Run iterations with RANDOM article selection for better diversity
-    for (let i = 1; i <= iterations; i++) {
-      const testData = {};
-      
-      try {
-        // Select a random article for this iteration (improves diversity!)
-        const randomArticle = describedArticles[Math.floor(Math.random() * describedArticles.length)];
-        const articleDetails = getArticleDetails(randomArticle.articleId);
-        
-        if (articleDetails && articleDetails.sceneData && articleDetails.sceneData.scenes.length > 0) {
-          // Select a random scene from the article (more diversity!)
-          const randomSceneIndex = Math.floor(Math.random() * articleDetails.sceneData.scenes.length);
-          const randomScene = articleDetails.sceneData.scenes[randomSceneIndex];
-          
-          // Select a random frame from the scene
-          const randomFrameIndex = Math.floor(Math.random() * randomScene.frames.length);
-          const randomFrame = randomScene.frames[randomFrameIndex];
-          
-          const articleText = articleDetails.text || articleDetails.description || articleDetails.title;
-          
-          const domains = ['news', 'sports', 'reels'];
-          for (const domain of domains) {
-            testData[domain] = {
-              path: randomFrame.path,
-              reference: articleText.substring(0, 500),
-            };
-          }
-          
-          testData.default = testData.news;
-          
-          console.log(`Iteration ${i}: Using article ${randomArticle.articleId}, scene ${randomSceneIndex}, frame ${randomFrameIndex}`);
-        } else {
-          console.log(`⚠ Iteration ${i}: No valid frames in article ${randomArticle.articleId}`);
-        }
-      } catch (e) {
-        console.error(`Error preparing test data for iteration ${i}:`, e.message);
-      }
-      
-      const result = await runFPOIteration(i, testData, {
-        enableEvolution,
-        evolutionInterval,
-      });
-      results.push(result);
-    }
-
-    const lastResult = results[results.length - 1];
+    const queueStatus = getStatus(QUEUE_TYPES.FPO);
     
-    // Clear flag
-    clearFlag('fpo-running');
+    console.log(`✓ FPO job queued: ${iterations} iterations (position: ${position})`);
     
     res.json({
       success: true,
-      iterations: results.length,
-      results,
-      finalPrompt: lastResult.globalPrompt,
-      evolved: lastResult.evolution ? lastResult.evolution.evolved.length : 0,
-      generation: lastResult.evolution ? lastResult.evolution.generation : 0,
+      queued: true,
+      jobId,
+      position,
+      message: queueStatus.processing 
+        ? `Job queued at position ${position}. Another FPO job is currently running.`
+        : 'Job queued and will start shortly.',
+      queueStatus: {
+        queued: queueStatus.queued,
+        processing: queueStatus.processing ? true : false,
+      },
     });
   } catch (error) {
     console.error('FPO error:', error);
-    
-    // Clear flag on error
-    clearFlag('fpo-running');
-    
     res.status(500).json({ error: error.message });
   }
 });
