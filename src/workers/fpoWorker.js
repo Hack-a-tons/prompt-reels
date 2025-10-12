@@ -4,7 +4,7 @@
  */
 
 const { getArticleDetails, listArticles } = require('../core/articleWorkflow');
-const { runFPOIteration } = require('../core/fpo');
+const { runFPOIteration } = require('../core/promptOptimizer');
 const { setFlag, clearFlag } = require('../utils/flags');
 
 /**
