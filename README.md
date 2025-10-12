@@ -46,21 +46,272 @@ Built for **WeaveHacks 2 — Self-Improving Agents**.
 
 ---
 
-## 🔬 Federated Prompt Optimization (FPO)
-This project is inspired by [*FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits*](https://arxiv.org/abs/2509.24701) and related works such as *FedPrompt* and *PromptFL*.  
+## 🔬 Federated Prompt Optimization (FPO) - How It Works
 
-The FPO principle allows multiple agents to improve a shared prompt collaboratively **without sharing raw data**. Each client locally evaluates prompts on its own data and reports only summarized performance (reward). The central aggregator merges results and redistributes improved prompts.
+This project implements **Federated Prompt Optimization (FPO)**, inspired by [*FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits*](https://arxiv.org/abs/2509.24701) and related works (*FedPrompt*, *PromptFL*).
 
-**In Prompt Reels:**
-- Each domain (e.g., news, sports, short-form reels) acts as a federated client.
-- Each client tests several prompt templates using Google Gemini to describe video scenes.
-- Local performance metrics (semantic similarity to known descriptions) are sent to an aggregator.
-- Aggregator updates prompt priorities and distributes a new global prompt.
-- Weave visualizes the improvement curve over time.
+### 🎯 The Problem
+AI models are only as good as their prompts. But prompt engineering is:
+- Manual and time-consuming
+- Requires expertise
+- Doesn't improve automatically
+- Hard to maintain across deployments
 
-This approach enables *self-improving behavior* without retraining the model itself.
+### 💡 The Solution: FPO
+**Prompts that optimize themselves** across multiple deployments without centralized training or sharing raw data.
 
-**References:**
+---
+
+### 🔄 How FPO Works in Prompt Reels
+
+#### **Two Optimization Loops**
+
+We optimize **2 separate prompts** that run continuously:
+
+1. **Scene Description Prompt** (`video-scene-description`)
+   - Task: Describe what's happening in video scenes
+   - Input: Video frames (3 per scene)
+   - Output: Text description
+   - Evaluation: Semantic similarity to ground truth
+
+2. **Video-Article Match Prompt** (`video-article-match`)
+   - Task: Rate how well video matches article (0-100)
+   - Input: Article text + scene descriptions + transcripts
+   - Output: Match score + explanation
+   - Evaluation: Human feedback or heuristic scoring
+
+#### **Automatic, No Human Involvement**
+
+FPO runs **automatically** during normal operations:
+
+```
+Article Fetch → Describe Scenes → Rate Match → FPO Updates
+     ↓              ↓                  ↓             ↓
+   Fetch API    Describe API       Rate API    Background
+   (manual)     (uses FPO v1)    (uses FPO v2)  (auto-update)
+```
+
+**No separate FPO command needed!** It runs in the background as you process videos.
+
+#### **Iteration Process**
+
+Each prompt goes through **multiple iterations**:
+
+```javascript
+// Default configuration
+const FPO_CONFIG = {
+  maxIterations: 10,        // Try 10 prompt variations
+  samplesPerIteration: 3,   // Test each on 3 videos
+  convergenceThreshold: 0.05 // Stop if < 5% improvement
+}
+```
+
+**When does it stop?**
+- After 10 iterations (max)
+- When improvement < 5% (converged)
+- When no better prompts found (local optimum)
+
+#### **How Prompts Improve**
+
+1. **Start with baseline prompt** (v1.0)
+   ```
+   "Describe this video scene in detail"
+   ```
+
+2. **AI generates variations** (v1.1, v1.2, v1.3)
+   ```
+   "Analyze these frames and describe: 1) Main subjects..."
+   "Examine the video frames. Identify key visual elements..."
+   "Describe what's happening in this scene, focusing on..."
+   ```
+
+3. **Test each variant** on real data (3 videos each)
+   - Run scene description with variant
+   - Compare to ground truth (article text)
+   - Calculate similarity score
+
+4. **Select best performing** variant
+   ```
+   v1.0: score 0.72
+   v1.1: score 0.78  ← WINNER
+   v1.2: score 0.75
+   ```
+
+5. **Promote winner to v2.0**, repeat until converged
+
+---
+
+### 📊 Where to See Prompt History
+
+**1. Local File System**
+```bash
+# All prompts stored in JSON
+cat data/prompts.json | jq
+```
+
+**Structure:**
+```json
+{
+  "video-scene-description": {
+    "id": "video-scene-description",
+    "name": "Video Scene Description",
+    "currentVersion": "1.3",
+    "versions": [
+      {
+        "version": "1.0",
+        "template": "Original prompt...",
+        "performance": { "avgScore": 0.72, "samples": 10 },
+        "createdAt": "2025-01-12T10:00:00Z"
+      },
+      {
+        "version": "1.1",
+        "template": "Improved prompt...",
+        "performance": { "avgScore": 0.78, "samples": 10 },
+        "createdAt": "2025-01-12T10:15:00Z"
+      },
+      {
+        "version": "1.2",
+        "template": "Even better prompt...",
+        "performance": { "avgScore": 0.81, "samples": 10 },
+        "createdAt": "2025-01-12T10:30:00Z",
+        "isActive": true
+      }
+    ],
+    "history": [...]
+  }
+}
+```
+
+**2. Weights & Biases (W&B) Weave**
+
+View online at: https://wandb.ai/prompt-reels
+
+- **Runs Tab**: See each FPO iteration
+- **Metrics**: Track avg_score over time
+- **Artifacts**: View prompt versions
+- **Charts**: Visualize improvement curve
+
+**3. API Endpoints**
+```bash
+# Get all prompts
+curl https://reels.hurated.com/api/prompts | jq
+
+# Get specific prompt history
+curl https://reels.hurated.com/api/prompts/video-scene-description | jq
+
+# See current version
+curl https://reels.hurated.com/api/prompts/video-scene-description/current | jq
+```
+
+---
+
+### 🚀 Running FPO
+
+#### **Automatic (Recommended)**
+FPO runs automatically when you:
+```bash
+# Process articles (FPO runs in background)
+./scripts/process-article.sh
+./scripts/process-articles.sh 10
+
+# Use dashboard button
+# Click "Add 10 Articles" → FPO runs automatically
+```
+
+#### **Manual (For Testing)**
+```bash
+# Run FPO optimization explicitly
+node src/core/promptOptimizer.js --domain video-scene-description --iterations 10
+
+# Or via API
+curl -X POST https://reels.hurated.com/api/fpo/optimize \
+  -H "Content-Type: application/json" \
+  -d '{"domain":"video-scene-description","iterations":10}'
+```
+
+---
+
+### 📈 Monitoring Progress
+
+**Watch prompts improve in real-time:**
+
+```bash
+# Terminal 1: Process articles
+./scripts/process-articles.sh 20
+
+# Terminal 2: Watch prompt evolution
+watch -n 5 'cat data/prompts.json | jq ".\"video-scene-description\".currentVersion, .\"video-scene-description\".versions[-1].performance"'
+```
+
+**Expected output:**
+```
+Iteration 1: avgScore: 0.72
+Iteration 2: avgScore: 0.75 (+4.2% improvement)
+Iteration 3: avgScore: 0.78 (+4.0% improvement)
+Iteration 4: avgScore: 0.79 (+1.3% improvement)
+Iteration 5: avgScore: 0.79 (+0.0% improvement)
+→ CONVERGED (< 5% improvement)
+```
+
+---
+
+### 🎓 Key Concepts
+
+**1. No Model Retraining**
+- We don't fine-tune Gemini or GPT-4
+- We only optimize the prompt text
+- Much faster and cheaper
+
+**2. Federated = No Data Sharing**
+- Each deployment can run FPO independently
+- Only prompt text and scores are shared (optional)
+- Raw video data stays local
+
+**3. Multi-Arm Bandit**
+- Tests multiple prompt variants in parallel
+- Allocates more resources to promising variants
+- Quickly eliminates poor performers
+
+**4. Continuous Learning**
+- System gets better with every video processed
+- No manual intervention needed
+- Improvements compound over time
+
+---
+
+### 🔍 Example: Scene Description Evolution
+
+**Version 1.0 (Baseline)**
+```
+Prompt: "Describe this video scene"
+Output: "A person is standing outside."
+Score: 0.65
+```
+
+**Version 1.5 (After 5 iterations)**
+```
+Prompt: "Analyze these frames from a video scene. Describe: 
+1) Main subjects and their actions
+2) Setting and environment
+3) Key visual elements
+4) Temporal progression across frames"
+
+Output: "A news reporter in professional attire stands in front of 
+a crashed helicopter on a Sacramento highway at night. Bystanders 
+gather around the damaged aircraft. Emergency vehicles arrive with 
+flashing lights as the crowd grows larger."
+
+Score: 0.82 (+26% improvement!)
+```
+
+**Version 2.0 (After 10 iterations)**
+```
+Score: 0.87 (+34% improvement from baseline)
+```
+
+---
+
+### 📚 References
 - [FedPOB: Sample-Efficient Federated Prompt Optimization via Bandits](https://arxiv.org/abs/2509.24701). arXiv:2509.24701 (2025)
 - [FedPrompt: Communication-Efficient and Privacy Preserving Prompt Tuning in Federated Learning](https://arxiv.org/abs/2208.12268). arXiv:2208.12268 (2022)
 - [Federated Prompting and Chain-of-Thought Reasoning for Improving LLMs Answering](https://arxiv.org/abs/2310.15080). arXiv:2310.15080 (2023)

@@ -35,12 +35,34 @@ const initWeave = async () => {
             model: config.geminiModel,
             azureDeployment: config.azureOpenAI.deploymentName,
           },
+          settings: {
+            mode: 'online',  // Force online mode
+            silent: true,     // Reduce noise
+          },
         });
         wandbRun = wandb;
         useCloudWeave = true;
         weaveClient = { initialized: true, cloud: true };
         simpleLog.info(`W&B initialized for project: ${config.wandbProject}`);
         simpleLog.info(`View at: https://wandb.ai/${config.wandbProject}`);
+        
+        // Setup graceful shutdown
+        const gracefulShutdown = async (signal) => {
+          if (wandbRun) {
+            simpleLog.info(`${signal} received, finishing W&B run...`);
+            try {
+              await wandb.finish();
+              simpleLog.info('W&B run finished successfully');
+            } catch (err) {
+              simpleLog.error(`Error finishing W&B: ${err.message}`);
+            }
+            process.exit(0);
+          }
+        };
+        
+        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        
         return weaveClient;
       } catch (cloudError) {
         simpleLog.warn(`Failed to connect to W&B cloud, using file-based logging: ${cloudError.message}`);
