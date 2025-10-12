@@ -288,6 +288,56 @@ Response: {
 - Default (0.4): Good balance for most videos
 - Optionally extracts 3 frames per scene (beginning/middle/end)
 
+### View Detected Scenes 🎥
+
+**Visual Scene Viewer** - Beautiful web interface to view scenes with video player and frames:
+
+```bash
+# In browser (after scene detection)
+https://api.reels.hurated.com/api/scenes/<VIDEO_ID>
+
+# Or get scenes as JSON
+https://api.reels.hurated.com/api/scenes/<VIDEO_ID>/json
+```
+
+**Features:**
+- 🎬 Video player with auto-play
+- 📊 Stats (scene count, threshold, date)
+- 🖼️ 3 frames per scene (if extracted)
+- ⏱️ Click scene time to seek video
+- 🔍 Auto-highlight current scene during playback
+- 📱 Responsive design (mobile-friendly)
+- 📝 Scene descriptions (when added)
+
+**Check which videos have scenes detected:**
+
+```bash
+# List all videos with scene detection
+./scripts/detected.sh
+
+# Show scenes for specific video
+./scripts/detected.sh video-1234567890
+
+# Show full JSON
+./scripts/detected.sh -j video-1234567890
+
+# On dev server
+./scripts/detected.sh dev
+```
+
+**Updated list.sh** now shows scene detection status:
+
+```bash
+./scripts/list.sh
+
+# Output:
+# 1. video-1760239791824-656504757
+#    Size: 61M
+#    Date: Oct 12 02:30
+#    ✓ Scenes: 12
+#    https://api.reels.hurated.com/api/scenes/video-1760239791824-656504757
+```
+
 ### FPO (Federated Prompt Optimization) with Evolution 🧬
 
 Complete guide to the self-improving prompt system.

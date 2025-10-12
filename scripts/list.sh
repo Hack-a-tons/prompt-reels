@@ -121,11 +121,29 @@ echo "$FILES" | while read -r line; do
     echo -e "   Size: $size"
     echo -e "   Date: $date"
     
+    # Check if scenes were detected
+    if [ "$ENVIRONMENT" = "prod" ]; then
+        HAS_SCENES=$(ssh reels.hurated.com "test -f prompt-reels/output/${video_id}_scenes.json && echo yes || echo no" 2>/dev/null)
+    else
+        HAS_SCENES=$(test -f "output/${video_id}_scenes.json" && echo yes || echo no)
+    fi
+    
+    if [ "$HAS_SCENES" = "yes" ]; then
+        if [ "$ENVIRONMENT" = "prod" ]; then
+            SCENE_COUNT=$(ssh reels.hurated.com "cat prompt-reels/output/${video_id}_scenes.json" 2>/dev/null | jq -r '.sceneCount')
+        else
+            SCENE_COUNT=$(cat "output/${video_id}_scenes.json" 2>/dev/null | jq -r '.sceneCount')
+        fi
+        echo -e "   ${GREEN}✓ Scenes: $SCENE_COUNT${NC}"
+        echo -e "   ${GRAY}https://api.reels.hurated.com/api/scenes/$video_id${NC}"
+    else
+        echo -e "   ${YELLOW}○ No scenes detected${NC}"
+    fi
+    
     # Show usage commands
     if [ $counter -eq 1 ]; then
         echo ""
-        echo -e "   ${GRAY}# Use with:${NC}"
-        echo -e "   ${GRAY}./scripts/detect-scenes.sh $video_id${NC}"
+        echo -e "   ${GRAY}# Detect scenes:${NC}"
         echo -e "   ${GRAY}./scripts/detect-scenes.sh -f $video_id${NC}"
     fi
     
