@@ -24,6 +24,14 @@ const cleanArticleText = (text) => {
   // Remove VIDEO timestamp patterns (e.g., "VIDEO05:11")
   cleaned = cleaned.replace(/VIDEO\d{1,2}:\d{2}/gi, '');
   
+  // Fix multiline markdown links: [text\nacross\nlines](url) -> [text across lines](url)
+  // This handles the case where link text is split across multiple lines
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+    // Replace newlines in link text with spaces
+    const cleanedLinkText = linkText.replace(/\s*\n\s*/g, ' ').trim();
+    return `[${cleanedLinkText}](${url})`;
+  });
+  
   // Remove excessive newlines (more than 2 in a row)
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   

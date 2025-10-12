@@ -373,16 +373,18 @@ app.get('/', (req, res) => {
         
         async function addArticles() {
             if (isAddingArticles) {
-                alert('Already adding articles. Please wait...');
+                alert('Already adding articles, please wait...');
                 return;
             }
             
             const btn = document.getElementById('addArticlesBtn');
-            const originalText = btn.innerHTML;
+            const status = document.getElementById('addingStatus');
+            
+            // Hide button immediately
+            btn.style.display = 'none';
+            status.style.display = 'flex';
             
             isAddingArticles = true;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner"></span>Adding articles...';
             
             // Auto-refresh every 3 seconds to show progress
             const refreshInterval = setInterval(() => {
@@ -411,8 +413,9 @@ app.get('/', (req, res) => {
                     location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));
-                    btn.disabled = false;
-                    btn.innerHTML = originalText;
+                    // Show button again on error
+                    btn.style.display = 'inline-block';
+                    status.style.display = 'none';
                     isAddingArticles = false;
                 }
             } catch (err) {
@@ -813,6 +816,14 @@ app.get('/articles/:articleId', (req, res) => {
         async function rateArticle() {
             if (!confirm('Rate video-article match? This uses AI to analyze.')) return;
             
+            // Hide button immediately
+            const rateBtn = document.getElementById('rateBtn');
+            const ratingStatus = document.getElementById('ratingStatus');
+            if (rateBtn && ratingStatus) {
+                rateBtn.style.display = 'none';
+                ratingStatus.style.display = 'inline-flex';
+            }
+            
             try {
                 const res = await fetch('/api/articles/${article.articleId}/rate', { method: 'POST' });
                 const data = await res.json();
@@ -821,9 +832,19 @@ app.get('/articles/:articleId', (req, res) => {
                     location.reload();
                 } else {
                     alert('Error: ' + (data.error || 'Unknown error'));
+                    // Show button again on error
+                    if (rateBtn && ratingStatus) {
+                        rateBtn.style.display = 'inline-block';
+                        ratingStatus.style.display = 'none';
+                    }
                 }
             } catch (err) {
                 alert('Error: ' + err.message);
+                // Show button again on error
+                if (rateBtn && ratingStatus) {
+                    rateBtn.style.display = 'inline-block';
+                    ratingStatus.style.display = 'none';
+                }
             }
         }
     </script>
