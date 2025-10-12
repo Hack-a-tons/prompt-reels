@@ -91,7 +91,10 @@ const listArticles = () => {
     return {
       articleId: articleData.articleId,
       title: articleData.title,
-      source: articleData.source.domain,
+      source: {
+        domain: articleData.source.domain,
+        url: articleData.source.url,
+      },
       status: articleData.workflow?.status || ArticleStatus.FETCHED,
       videoUrl: articleData.video.url,
       videoType: articleData.video.type,

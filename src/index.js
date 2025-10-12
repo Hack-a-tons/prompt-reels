@@ -187,7 +187,7 @@ app.get('/', (req, res) => {
                             <a href="/articles/${article.articleId}">${article.title}</a>
                         </div>
                     </td>
-                    <td>${article.source}</td>
+                    <td>${article.source.domain}</td>
                     <td><span class="status status-${article.status}">${article.status}</span></td>
                     <td>
                         <span class="video-badge ${article.hasLocalVideo ? 'local' : ''}">${article.videoType}</span>

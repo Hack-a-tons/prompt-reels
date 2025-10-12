@@ -396,7 +396,8 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
       
       // Skip if article already exists in database
       if (existingUrls.has(article.url)) {
-        log.debug(`Skipping existing article: ${article.url}`);
+        log.info(`Skipping duplicate article: ${article.title.substring(0, 50)}...`);
+        log.debug(`  URL already in database: ${article.url}`);
         continue;
       }
       
