@@ -11,10 +11,11 @@ NC='\033[0m' # No Color
 # Default values
 CONFIRM=false
 TARGET=""
+ENVIRONMENT="prod"
 
 # Function to display help
 show_help() {
-    echo "Usage: ./scripts/cleanup.sh [TARGET] [OPTIONS]"
+    echo "Usage: ./scripts/cleanup.sh [TARGET] [ENVIRONMENT] [OPTIONS]"
     echo ""
     echo "Clean specific directories or everything"
     echo ""
@@ -24,6 +25,10 @@ show_help() {
     echo "  output                  Clean output directory (analysis results, logs)"
     echo "  uploads                 Clean uploaded videos"
     echo "  prompts                 Reset data/prompts.json to original state"
+    echo ""
+    echo "Environment:"
+    echo "  dev                     Localhost (http://localhost:3000)"
+    echo "  prod                    Production (https://reels.hurated.com) [default]"
     echo ""
     echo "Options:"
     echo "  -y, --yes               Skip confirmation prompt"
@@ -61,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             TARGET=$1
             shift
             ;;
+        dev|prod)
+            ENVIRONMENT=$1
+            shift
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
             echo ""
@@ -88,9 +97,44 @@ needs_sudo() {
     return 1  # doesn't need sudo
 }
 
+# Set base URL based on environment
+if [ "$ENVIRONMENT" = "dev" ]; then
+    BASE_URL="http://localhost:3000"
+else
+    BASE_URL="https://reels.hurated.com"
+fi
+
 # Functions to clean each target
 clean_articles() {
-    echo -e "${YELLOW}Cleaning articles...${NC}"
+    echo -e "${YELLOW}Cleaning articles via API (${ENVIRONMENT})...${NC}"
+    
+    # Call DELETE /api/articles endpoint
+    response=$(curl -s -X DELETE "$BASE_URL/api/articles" -H "Content-Type: application/json")
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ Failed to connect to API${NC}"
+        echo -e "${YELLOW}Trying local filesystem cleanup...${NC}"
+        clean_articles_local
+        return
+    fi
+    
+    success=$(echo "$response" | jq -r '.success' 2>/dev/null)
+    
+    if [ "$success" = "true" ]; then
+        count=$(echo "$response" | jq -r '.deletedCount')
+        message=$(echo "$response" | jq -r '.message')
+        echo -e "${GREEN}✓ $message${NC}"
+        echo -e "${GREEN}✓ Deleted $count files${NC}"
+    else
+        error=$(echo "$response" | jq -r '.error' 2>/dev/null)
+        echo -e "${RED}✗ API error: $error${NC}"
+        echo -e "${YELLOW}Trying local filesystem cleanup...${NC}"
+        clean_articles_local
+    fi
+}
+
+# Fallback: local filesystem cleanup
+clean_articles_local() {
     local count=0
     local use_sudo=""
     

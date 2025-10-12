@@ -336,6 +336,12 @@ const downloadVideo = async (videoUrl, articleId) => {
 const fetchNewsArticle = async (query = 'latest news video', initialMaxResults = 3) => {
   log.info(`Fetching news articles for: "${query}"`);
   
+  // Load existing articles to avoid duplicates
+  const { listArticles } = require('./articleWorkflow');
+  const existingArticles = listArticles();
+  const existingUrls = new Set(existingArticles.map(a => a.source?.url).filter(Boolean));
+  log.info(`Found ${existingUrls.size} existing articles in database`);
+  
   // Exponential backoff: try 3, 6, 12, 24, 48, 96 articles
   const retryLimits = [3, 6, 12, 24, 48, 96];
   let totalChecked = 0;
@@ -358,7 +364,13 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
     for (let i = 0; i < articles.length; i++) {
       const article = articles[i];
       
-      // Skip if we've already checked this URL
+      // Skip if article already exists in database
+      if (existingUrls.has(article.url)) {
+        log.debug(`Skipping existing article: ${article.url}`);
+        continue;
+      }
+      
+      // Skip if we've already checked this URL in this session
       if (checkedUrls.has(article.url)) {
         log.debug(`Skipping already checked: ${article.url}`);
         continue;

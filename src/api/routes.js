@@ -899,6 +899,115 @@ router.post('/articles/:articleId/describe', async (req, res) => {
 });
 
 /**
+ * DELETE /api/articles/:articleId
+ * Delete an article and its associated files (video, scenes, etc.)
+ */
+router.delete('/articles/:articleId', (req, res) => {
+  try {
+    const { articleId } = req.params;
+    const articleDetails = getArticleDetails(articleId);
+    
+    if (!articleDetails) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+    
+    const deletedFiles = [];
+    
+    // Delete article metadata JSON
+    const articlesDir = path.join(config.outputDir, 'articles');
+    const articlePath = path.join(articlesDir, `${articleId}.json`);
+    if (fs.existsSync(articlePath)) {
+      fs.unlinkSync(articlePath);
+      deletedFiles.push(articlePath);
+    }
+    
+    // Delete video file
+    if (articleDetails.video.localPath) {
+      const videoPath = path.join(process.cwd(), articleDetails.video.localPath);
+      if (fs.existsSync(videoPath)) {
+        fs.unlinkSync(videoPath);
+        deletedFiles.push(videoPath);
+      }
+    }
+    
+    // Delete scene data
+    const scenesPath = path.join(config.outputDir, `${articleId}_scenes.json`);
+    if (fs.existsSync(scenesPath)) {
+      fs.unlinkSync(scenesPath);
+      deletedFiles.push(scenesPath);
+    }
+    
+    // Delete scene frames directory
+    const scenesDir = path.join(config.outputDir, `${articleId}_frames`);
+    if (fs.existsSync(scenesDir)) {
+      fs.rmSync(scenesDir, { recursive: true, force: true });
+      deletedFiles.push(scenesDir);
+    }
+    
+    res.json({
+      success: true,
+      articleId,
+      deletedFiles: deletedFiles.length,
+      message: `Article ${articleId} and associated files deleted successfully`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/articles (delete all articles)
+ * Delete all articles and their associated files
+ */
+router.delete('/articles', (req, res) => {
+  try {
+    const articlesDir = path.join(config.outputDir, 'articles');
+    const uploadsDir = path.join(config.uploadDir, 'articles');
+    let deletedCount = 0;
+    
+    // Delete article JSONs
+    if (fs.existsSync(articlesDir)) {
+      const files = fs.readdirSync(articlesDir);
+      files.forEach(file => {
+        fs.unlinkSync(path.join(articlesDir, file));
+        deletedCount++;
+      });
+    }
+    
+    // Delete article videos
+    if (fs.existsSync(uploadsDir)) {
+      const files = fs.readdirSync(uploadsDir);
+      files.forEach(file => {
+        fs.unlinkSync(path.join(uploadsDir, file));
+        deletedCount++;
+      });
+    }
+    
+    // Delete all scene data and frames
+    const outputFiles = fs.readdirSync(config.outputDir);
+    outputFiles.forEach(file => {
+      if (file.startsWith('article-') && (file.endsWith('_scenes.json') || file.endsWith('_frames'))) {
+        const filePath = path.join(config.outputDir, file);
+        if (fs.statSync(filePath).isDirectory()) {
+          fs.rmSync(filePath, { recursive: true, force: true });
+        } else {
+          fs.unlinkSync(filePath);
+        }
+        deletedCount++;
+      }
+    });
+    
+    res.json({
+      success: true,
+      deletedCount,
+      message: 'All articles and associated files deleted successfully',
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/articles/:articleId/rate
  * Rate how well the video matches the article
  */
