@@ -11,7 +11,6 @@ NC='\033[0m' # No Color
 # Default values
 ENVIRONMENT="prod"
 QUERY="latest news video"
-MAX_RESULTS=5
 
 # Load environment variables
 if [ -f .env ]; then
@@ -26,7 +25,6 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -q, --query TEXT        Search query (default: 'latest news video')"
-    echo "  -n, --max-results NUM   Max articles to try (default: 5)"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Environment:"
@@ -40,17 +38,15 @@ show_help() {
     echo "  # Custom search query"
     echo "  ./scripts/fetch-news.sh -q 'technology news video'"
     echo ""
-    echo "  # Try more articles"
-    echo "  ./scripts/fetch-news.sh -n 10"
-    echo ""
     echo "  # On dev server"
     echo "  ./scripts/fetch-news.sh dev"
     echo ""
     echo "What it does:"
-    echo "  1. Searches Tavily for news articles matching query"
+    echo "  1. Searches Tavily for news articles (exponential backoff: 3, 6, 12, 24, 48, 96)"
     echo "  2. Extracts video URL from article page using BrowserBase"
-    echo "  3. Downloads video to uploads/articles/"
+    echo "  3. Downloads video to uploads/articles/ (skips blob: URLs)"
     echo "  4. Saves article metadata to output/articles/"
+    echo "  5. Automatically retries with more articles if no video found"
     echo ""
     echo "Requirements:"
     echo "  - TAVILY_API_KEY in .env"
@@ -68,10 +64,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         -q|--query)
             QUERY=$2
-            shift 2
-            ;;
-        -n|--max-results)
-            MAX_RESULTS=$2
             shift 2
             ;;
         prod|dev)
@@ -102,14 +94,13 @@ fi
 
 echo -e "${YELLOW}=== Fetch News Article ($ENVIRONMENT) ===${NC}"
 echo -e "${BLUE}Query: $QUERY${NC}"
-echo -e "${BLUE}Max Results: $MAX_RESULTS${NC}"
+echo -e "${GRAY}Strategy: Exponential backoff (tries 3, 6, 12, 24, 48, 96 articles)${NC}"
 echo ""
 
 # Build request body
 request_body=$(cat <<EOF
 {
-  "query": "$QUERY",
-  "maxResults": $MAX_RESULTS
+  "query": "$QUERY"
 }
 EOF
 )

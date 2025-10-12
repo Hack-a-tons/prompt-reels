@@ -739,9 +739,10 @@ router.get('/scenes/:videoId/json', (req, res) => {
  */
 router.post('/fetch-news', async (req, res) => {
   try {
-    const { query = 'latest news video', maxResults = 5 } = req.body;
+    const { query = 'latest news video' } = req.body;
     
-    const articleData = await fetchNewsArticle(query, maxResults);
+    // Uses exponential backoff internally: 3, 6, 12, 24, 48, 96 articles
+    const articleData = await fetchNewsArticle(query);
     
     res.json({
       success: true,
