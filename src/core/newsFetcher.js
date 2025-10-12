@@ -32,9 +32,28 @@ const fetchNewsWithTavily = async (query = 'latest news video', maxResults = 5) 
     return response.data.results || [];
   } catch (error) {
     log.error(`Tavily API error: ${error.message}`);
+    log.error(`  Query: "${query}"`);
+    log.error(`  Max results: ${maxResults}`);
+    log.error(`  Error type: ${error.name}`);
+    
     if (error.response) {
-      log.error(`Tavily response: ${JSON.stringify(error.response.data)}`);
+      log.error(`  HTTP Status: ${error.response.status}`);
+      log.error(`  Response: ${JSON.stringify(error.response.data)}`);
     }
+    
+    if (error.code) {
+      log.error(`  Error code: ${error.code}`);
+    }
+    
+    // Provide helpful hints
+    if (error.response?.status === 401) {
+      log.error(`  Hint: Check TAVILY_API_KEY in .env`);
+    } else if (error.response?.status === 429) {
+      log.error(`  Hint: Rate limit exceeded - wait before retrying`);
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      log.error(`  Hint: Network connectivity issue`);
+    }
+    
     throw error;
   }
 };
@@ -206,6 +225,32 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
     return videoData;
   } catch (error) {
     log.error(`BrowserBase error: ${error.message}`);
+    log.error(`  Article URL: ${articleUrl}`);
+    log.error(`  Session ID: ${sessionId || 'not created'}`);
+    log.error(`  Error type: ${error.name}`);
+    
+    // Log stack trace for debugging
+    if (error.stack) {
+      const stackLines = error.stack.split('\n').slice(0, 5); // First 5 lines
+      stackLines.forEach(line => log.error(`  ${line.trim()}`));
+    }
+    
+    // If it's an axios error with response data, log it
+    if (error.response) {
+      log.error(`  HTTP Status: ${error.response.status}`);
+      if (error.response.data) {
+        log.error(`  Response: ${JSON.stringify(error.response.data).substring(0, 200)}`);
+      }
+    }
+    
+    // If it's a Playwright error, might have additional context
+    if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+      log.error(`  Timeout occurred - page may be slow or hanging`);
+    }
+    if (error.message.includes('429') || error.response?.status === 429) {
+      log.error(`  Rate limit hit - too many requests to BrowserBase`);
+    }
+    
     return null;
   } finally {
     // Always close browser and end session
@@ -251,6 +296,33 @@ const downloadVideo = async (videoUrl, articleId) => {
     });
   } catch (error) {
     log.error(`Video download error: ${error.message}`);
+    log.error(`  Video URL: ${videoUrl.substring(0, 100)}${videoUrl.length > 100 ? '...' : ''}`);
+    log.error(`  Article ID: ${articleId}`);
+    log.error(`  Target path: ${videoPath}`);
+    log.error(`  Error type: ${error.name}`);
+    
+    if (error.response) {
+      log.error(`  HTTP Status: ${error.response.status}`);
+      log.error(`  Content-Type: ${error.response.headers?.['content-type'] || 'unknown'}`);
+    }
+    
+    if (error.code) {
+      log.error(`  Error code: ${error.code}`);
+    }
+    
+    // Provide helpful hints
+    if (error.code === 'ENOTFOUND') {
+      log.error(`  Hint: Video URL hostname not found - may be invalid or deleted`);
+    } else if (error.code === 'ECONNREFUSED') {
+      log.error(`  Hint: Connection refused - video server may be down`);
+    } else if (error.response?.status === 403) {
+      log.error(`  Hint: Access forbidden - video may require authentication`);
+    } else if (error.response?.status === 404) {
+      log.error(`  Hint: Video not found - may have been moved or deleted`);
+    } else if (error.message.includes('timeout')) {
+      log.error(`  Hint: Download timed out - video file may be too large`);
+    }
+    
     throw error;
   }
 };
@@ -365,9 +437,19 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
           return articleData;
         } else {
           log.warn('No video found in article');
+          log.debug(`  Checked video tags, iframes, JSON-LD, and meta tags`);
         }
       } catch (error) {
         log.error(`Error processing article: ${error.message}`);
+        log.error(`  Article: ${article.title.substring(0, 60)}...`);
+        log.error(`  URL: ${article.url}`);
+        log.error(`  Error type: ${error.name}`);
+        
+        // Show stack trace for unexpected errors
+        if (error.stack && !error.message.includes('BrowserBase')) {
+          const stackLines = error.stack.split('\n').slice(0, 3);
+          stackLines.forEach(line => log.error(`  ${line.trim()}`));
+        }
       }
     }
     
