@@ -188,14 +188,18 @@ if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
     echo ""
     echo -e "${YELLOW}View Results:${NC}"
     echo ""
-    echo -e "  ${GREEN}# Visual viewer with video + frames + descriptions${NC}"
-    echo -e "  ${BLUE}$BASE_URL/api/scenes/$VIDEO_ID${NC}"
+    echo -e "${GREEN}Visual Scene Viewer:${NC}"
+    if [ "$ENVIRONMENT" = "prod" ]; then
+        echo -e "${BLUE}https://api.reels.hurated.com/api/scenes/$VIDEO_ID${NC}"
+    else
+        echo -e "${BLUE}http://localhost:${PORT:-15000}/api/scenes/$VIDEO_ID${NC}"
+    fi
     echo ""
-    echo -e "  ${GREEN}# JSON data${NC}"
-    echo -e "  cat $output_path | jq ."
+    echo -e "${GRAY}# View JSON data${NC}"
+    echo -e "${GRAY}cat $output_path | jq .${NC}"
     echo ""
-    echo -e "  ${GREEN}# List detected scenes${NC}"
-    echo -e "  ./scripts/detected.sh $VIDEO_ID"
+    echo -e "${GRAY}# List detected scenes${NC}"
+    echo -e "${GRAY}./scripts/detected.sh $VIDEO_ID${NC}"
     
 else
     echo -e "${RED}✗ Scene description failed ($http_code)${NC}"
