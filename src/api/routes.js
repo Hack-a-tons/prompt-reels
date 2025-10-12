@@ -8,6 +8,7 @@ const { describeImage, describeScene } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
+const { transcribeSceneAudio } = require('../core/audioTranscription');
 const { fetchNewsArticle } = require('../core/newsFetcher');
 const {
   listArticles,
@@ -666,7 +667,16 @@ router.get('/scenes/:videoId', (req, res) => {
 
           ${scene.description ? `
             <div class="description">
-              ${scene.description}
+              <strong>🎬 Visual:</strong> ${scene.description}
+            </div>
+          ` : ''}
+          
+          ${scene.transcript ? `
+            <div class="description" style="border-left-color: #10b981; background: rgba(16, 185, 129, 0.05);">
+              <strong>🎙️ Dialogue:</strong> "${scene.transcript.text}"
+              <div style="margin-top: 8px; font-size: 0.85em; color: #999;">
+                Duration: ${scene.transcript.duration.toFixed(1)}s
+              </div>
             </div>
           ` : ''}
         </div>
@@ -862,9 +872,12 @@ router.post('/articles/:articleId/describe', async (req, res) => {
     const scenesDir = path.join(config.outputDir, `${articleId}_frames`);
     const scenesWithFrames = await extractSceneFrames(fullVideoPath, scenes, scenesDir);
     
-    // Describe each scene
+    // Describe each scene with visual and audio analysis
+    console.log(`\n🎯 Analyzing ${scenesWithFrames.length} scenes...`);
     for (let scene of scenesWithFrames) {
+      // Visual description
       if (scene.frames && scene.frames.length > 0) {
+        console.log(`  Scene ${scene.sceneId}: Generating visual description...`);
         const framePaths = scene.frames.map(f => f.path);
         const description = await describeScene(
           framePaths,
@@ -874,7 +887,26 @@ router.post('/articles/:articleId/describe', async (req, res) => {
         );
         scene.description = description;
       }
+      
+      // Audio transcription
+      console.log(`  Scene ${scene.sceneId}: Transcribing audio...`);
+      const transcript = await transcribeSceneAudio(
+        fullVideoPath,
+        scene.sceneId,
+        scene.start,
+        scene.end,
+        scenesDir
+      );
+      
+      if (transcript) {
+        scene.transcript = transcript;
+        console.log(`  Scene ${scene.sceneId}: Found dialogue (${transcript.text.length} chars)`);
+      } else {
+        console.log(`  Scene ${scene.sceneId}: No dialogue detected`);
+      }
     }
+    
+    console.log(`✓ Scene analysis complete\n`);
     
     // Save scene data
     const sceneData = {
@@ -1029,13 +1061,31 @@ router.post('/articles/:articleId/rate', async (req, res) => {
       return res.status(400).json({ error: 'Article has no scene descriptions yet. Run describe first.' });
     }
     
-    // Rate video-article match
-    // For now, use a simple prompt-based rating
+    // Rate video-article match using both visual and audio information
     const articleText = articleDetails.text || articleDetails.description;
-    const sceneDescriptions = articleDetails.sceneData.scenes
-      .map(s => s.description)
-      .filter(d => d)
+    
+    // Build comprehensive scene analysis with visual + audio
+    const sceneAnalysis = articleDetails.sceneData.scenes
+      .map(s => {
+        let analysis = '';
+        if (s.description) {
+          analysis += `Visual: ${s.description}`;
+        }
+        if (s.transcript) {
+          analysis += `\nDialogue: "${s.transcript.text}"`;
+        }
+        return analysis;
+      })
+      .filter(a => a)
       .join('\n\n');
+    
+    // Extract just transcripts for dialogue analysis
+    const transcripts = articleDetails.sceneData.scenes
+      .map(s => s.transcript?.text)
+      .filter(t => t)
+      .join(' ');
+    
+    const hasAudio = transcripts.length > 0;
     
     const ratingPrompt = `Rate how well this video matches the article on a scale of 0-100.
 
@@ -1044,11 +1094,15 @@ Article Title: ${articleDetails.title}
 Article Text:
 ${articleText.substring(0, 1000)}${articleText.length > 1000 ? '...' : ''}
 
-Video Scene Descriptions:
-${sceneDescriptions.substring(0, 1000)}${sceneDescriptions.length > 1000 ? '...' : ''}
+Video Analysis (${articleDetails.sceneData.sceneCount} scenes):
+${sceneAnalysis.substring(0, 1500)}${sceneAnalysis.length > 1500 ? '...' : ''}
+
+${hasAudio ? `\nNote: This video contains dialogue/narration, which provides additional context for matching.` : ''}
 
 Provide a rating (0-100) and brief explanation of how well the video illustrates the article content.
-Format: RATING: [number]\nEXPLANATION: [text]`;
+Consider both visual content and dialogue (if present).
+Format: RATING: [number]
+EXPLANATION: [text]`;
     
     const { describeImage } = require('../core/gemini');
     
