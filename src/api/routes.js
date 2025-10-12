@@ -194,7 +194,11 @@ router.get('/results/:videoId', (req, res) => {
  */
 router.post('/fpo/run', async (req, res) => {
   try {
-    const { iterations = 3 } = req.body;
+    const { 
+      iterations = 3,
+      enableEvolution = true,
+      evolutionInterval = 2,
+    } = req.body;
     
     // Find an actual extracted frame to use for testing
     let testFramePath = null;
@@ -226,15 +230,21 @@ router.post('/fpo/run', async (req, res) => {
     const results = [];
     
     for (let i = 1; i <= iterations; i++) {
-      const result = await runFPOIteration(i, testData);
+      const result = await runFPOIteration(i, testData, {
+        enableEvolution,
+        evolutionInterval,
+      });
       results.push(result);
     }
 
+    const lastResult = results[results.length - 1];
     res.json({
       success: true,
       iterations: results.length,
       results,
-      finalPrompt: results[results.length - 1].globalPrompt,
+      finalPrompt: lastResult.globalPrompt,
+      evolved: lastResult.evolution ? lastResult.evolution.evolved.length : 0,
+      generation: lastResult.evolution ? lastResult.evolution.generation : 0,
     });
   } catch (error) {
     console.error('FPO error:', error);
@@ -252,14 +262,20 @@ router.get('/fpo/status', (req, res) => {
     
     const status = {
       globalPrompt: prompts.global_prompt,
-      templates: prompts.templates.map(t => ({
-        id: t.id,
-        name: t.name,
-        template: t.template,
-        weight: t.weight,
-        performanceHistory: t.performance,
-        latestScore: t.performance[t.performance.length - 1]?.score,
-      })),
+      populationSize: prompts.templates.length,
+      maxGeneration: Math.max(...prompts.templates.map(t => t.generation || 0)),
+      templates: prompts.templates
+        .sort((a, b) => b.weight - a.weight)
+        .map(t => ({
+          id: t.id,
+          name: t.name,
+          template: t.template,
+          weight: t.weight,
+          generation: t.generation || 0,
+          parents: t.parents || [],
+          performanceHistory: t.performance,
+          latestScore: t.performance[t.performance.length - 1]?.score,
+        })),
     };
 
     res.json(status);

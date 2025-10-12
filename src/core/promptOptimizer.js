@@ -3,6 +3,7 @@ const path = require('path');
 const config = require('../config');
 const { describeImage, generateEmbedding, cosineSimilarity } = require('./gemini');
 const { logPromptEvaluation, logFPOIteration } = require('./weave');
+const { evolvePopulation } = require('./promptEvolution');
 
 /**
  * Load prompt templates from file
@@ -185,7 +186,9 @@ const aggregateResults = (prompts, federatedResults) => {
 /**
  * Run one iteration of Federated Prompt Optimization
  */
-const runFPOIteration = async (iterationNumber, testData) => {
+const runFPOIteration = async (iterationNumber, testData, options = {}) => {
+  const { enableEvolution = true, evolutionInterval = 2 } = options;
+  
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🎯 FPO Iteration ${iterationNumber}`);
   console.log(`${'='.repeat(60)}`);
@@ -199,6 +202,25 @@ const runFPOIteration = async (iterationNumber, testData) => {
   // Aggregate and update prompts
   prompts = aggregateResults(prompts, federatedResults);
   
+  // Evolve prompts (genetic crossover) after gathering performance data
+  let evolutionResult = null;
+  if (enableEvolution && iterationNumber % evolutionInterval === 0 && iterationNumber > 1) {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`🧬 EVOLUTION PHASE - Generation ${Math.floor(iterationNumber / evolutionInterval)}`);
+    console.log(`${'='.repeat(60)}`);
+    
+    evolutionResult = await evolvePopulation(prompts, {
+      maxPopulation: 10,
+      enableCrossover: true,
+      enableMutation: false, // Start with just crossover
+    });
+    
+    console.log(`\n   ✓ Evolved ${evolutionResult.evolved.length} new prompt(s)`);
+    console.log(`   ✓ Population size: ${evolutionResult.populationSize}`);
+    console.log(`   ✓ Current generation: ${evolutionResult.generation}`);
+    console.log(`${'='.repeat(60)}\n`);
+  }
+  
   // Save updated prompts
   savePrompts(prompts);
   
@@ -206,19 +228,27 @@ const runFPOIteration = async (iterationNumber, testData) => {
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`📊 Iteration ${iterationNumber} Complete`);
   console.log(`   Global prompt: ${prompts.global_prompt}`);
+  console.log(`   Population size: ${prompts.templates.length}`);
   console.log(`   Prompt weights:`);
-  prompts.templates.forEach(t => {
-    console.log(`      ${t.id.padEnd(20)} weight: ${t.weight.toFixed(4)}`);
-  });
+  prompts.templates
+    .sort((a, b) => b.weight - a.weight)
+    .forEach(t => {
+      const gen = t.generation ? ` [Gen ${t.generation}]` : '';
+      console.log(`      ${t.id.padEnd(25)} weight: ${t.weight.toFixed(4)}${gen}`);
+    });
   console.log(`${'─'.repeat(60)}\n`);
   
   // Log iteration to Weave
   await logFPOIteration({
     iteration: iterationNumber,
     globalPrompt: prompts.global_prompt,
+    populationSize: prompts.templates.length,
+    evolved: evolutionResult ? evolutionResult.evolved.length : 0,
+    generation: evolutionResult ? evolutionResult.generation : 0,
     prompts: prompts.templates.map(t => ({
       id: t.id,
       weight: t.weight,
+      generation: t.generation || 0,
       avgScore: t.performance[t.performance.length - 1]?.score,
     })),
   });
@@ -229,6 +259,7 @@ const runFPOIteration = async (iterationNumber, testData) => {
     iteration: iterationNumber,
     globalPrompt: prompts.global_prompt,
     results: federatedResults,
+    evolution: evolutionResult,
   };
 };
 

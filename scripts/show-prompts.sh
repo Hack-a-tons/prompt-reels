@@ -91,13 +91,15 @@ echo "$response" | jq -r --arg limit "$LIMIT" '
     .templates 
     | sort_by(-.weight) 
     | limit($limit | tonumber; .[])
-    | "\(.name)||||\(.id)||||\(.weight)||||\(.template)"
+    | "\(.name)||||\(.id)||||\(.weight)||||\(.generation // 0)||||\(.parents // [] | join(","))||||\(.template)"
 ' | while IFS= read -r line; do
     # Extract parts using custom delimiter
     name=$(echo "$line" | cut -d'|' -f1)
     id=$(echo "$line" | cut -d'|' -f5)
     weight=$(echo "$line" | cut -d'|' -f9)
-    template=$(echo "$line" | cut -d'|' -f13-)
+    generation=$(echo "$line" | cut -d'|' -f13)
+    parents=$(echo "$line" | cut -d'|' -f17)
+    template=$(echo "$line" | cut -d'|' -f21-)
     
     # Color based on weight
     if (( $(echo "$weight > 0" | bc -l) )); then
@@ -111,6 +113,12 @@ echo "$response" | jq -r --arg limit "$LIMIT" '
     # Display with numbering
     echo -e "${color}${counter}. ${name} (${id})${NC}"
     echo -e "${color}   Weight: ${weight}${NC}"
+    if [ "$generation" != "0" ]; then
+        echo -e "${BLUE}   Generation: ${generation}${NC}"
+        if [ -n "$parents" ] && [ "$parents" != "" ]; then
+            echo -e "${BLUE}   Parents: ${parents}${NC}"
+        fi
+    fi
     echo -e "   Prompt: \"${template}\""
     echo ""
     
@@ -119,6 +127,10 @@ done
 
 echo ""
 
-# Show current global prompt
+# Show summary
 global_prompt=$(echo "$response" | jq -r '.globalPrompt')
+pop_size=$(echo "$response" | jq -r '.populationSize')
+max_gen=$(echo "$response" | jq -r '.maxGeneration')
+
 echo -e "${BLUE}Current best: ${global_prompt}${NC}"
+echo -e "${BLUE}Population: ${pop_size} prompts | Max generation: ${max_gen}${NC}"

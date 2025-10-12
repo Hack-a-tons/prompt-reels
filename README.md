@@ -192,22 +192,31 @@ GET /api/results/:videoId
 Response: Analysis results JSON
 ```
 
-### FPO (Federated Prompt Optimization)
+### FPO (Federated Prompt Optimization) with Evolution 🧬
 ```bash
 POST /api/fpo/run
 {
-  "iterations": 3  // Number of optimization rounds
+  "iterations": 5,           // Number of optimization rounds
+  "enableEvolution": true,   // Enable genetic crossover (default: true)
+  "evolutionInterval": 2     // Evolve every N iterations (default: 2)
 }
 # Note: Uses extracted frames from previous video analysis for testing
 # If no frames available, runs without image evaluation
-# Each iteration tests 5 prompts × 3 domains = 15 evaluations
+# Evolution creates new prompts by combining top 2 performers
 
 GET /api/fpo/status
-# Returns current prompt weights and performance history
+# Returns current prompt weights, performance history, and generations
 
 GET /api/fpo/dashboard
 # Returns rankings with statistics (avg, min, max, trend)
 ```
+
+**Genetic Crossover:**
+- After every 2 iterations (configurable), the top 2 prompts "breed"
+- Uses Azure GPT to intelligently combine their best features
+- Creates a new "child" prompt that inherits strengths from both parents
+- Population evolves over time: Gen 0 (original) → Gen 1 → Gen 2 → ...
+- Worst performers are removed to keep population manageable (max 10 prompts)
 
 **What you'll see during FPO:**
 ```
