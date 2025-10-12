@@ -15,11 +15,12 @@ fi
 # Default values
 VERBOSE=false
 PAUSE_DURATION=0
-BASE_URL="http://localhost:${PORT:-15000}"
+ENVIRONMENT="dev"
+BASE_URL=""
 
 # Function to display help
 show_help() {
-    echo "Usage: ./test.sh [OPTIONS] [TEST_NAME]"
+    echo "Usage: ./test.sh [OPTIONS] [TEST_NAME] [ENVIRONMENT]"
     echo ""
     echo "Test the Prompt Reels API endpoints"
     echo ""
@@ -28,6 +29,12 @@ show_help() {
     echo "  -v, --verbose           Show verbose output (curl commands and JSON responses in gray)"
     echo "  -p, --pause [SECONDS]   Pause after each test (default: 30s or until key press)"
     echo "                          Can specify custom duration: -p5 or --pause 10"
+    echo ""
+    echo "Environment:"
+    echo "  dev                     Test against local dev server (default)"
+    echo "                          http://localhost:PORT"
+    echo "  prod                    Test against production server"
+    echo "                          https://api.reels.hurated.com"
     echo ""
     echo "Test Names:"
     echo "  all                     Run all tests"
@@ -38,14 +45,13 @@ show_help() {
     echo "  fpo                     Test federated prompt optimization"
     echo ""
     echo "Examples:"
-    echo "  ./test.sh all           Run all tests"
+    echo "  ./test.sh all           Run all tests (dev)"
+    echo "  ./test.sh all prod      Run all tests on production"
     echo "  ./test.sh -v health     Run health test with verbose output"
-    echo "  ./test.sh -pv all       Run all tests with pause (30s) and verbose"
-    echo "  ./test.sh -vp all       Same as above (flags can be combined)"
+    echo "  ./test.sh -v health prod  Run health test on production with verbose"
+    echo "  ./test.sh -pv all dev   Run all tests with pause (30s) and verbose on dev"
     echo "  ./test.sh -p5 upload    Run upload test, pause 5s after"
-    echo "  ./test.sh -vp3 prompts  Verbose with 3s pause"
-    echo "  ./test.sh -p10v fpo     Pause 10s with verbose"
-    echo "  ./test.sh --pause 10 -v analyze  Long form flags"
+    echo "  ./test.sh prompts prod  Test prompts on production"
     echo ""
 }
 
@@ -236,6 +242,10 @@ while [[ $# -gt 0 ]]; do
                 shift
             fi
             ;;
+        dev|prod)
+            ENVIRONMENT=$1
+            shift
+            ;;
         all|health|upload|analyze|prompts|fpo)
             TEST_NAME=$1
             shift
@@ -254,8 +264,16 @@ if [ -z "$TEST_NAME" ]; then
     exit 0
 fi
 
+# Set BASE_URL based on environment
+if [ "$ENVIRONMENT" = "prod" ]; then
+    BASE_URL="https://api.reels.hurated.com"
+else
+    BASE_URL="http://localhost:${PORT:-15000}"
+fi
+
 # Run the requested test
 echo -e "${YELLOW}=== Prompt Reels API Test Suite ===${NC}"
+echo -e "${YELLOW}Environment: $ENVIRONMENT${NC}"
 echo -e "${YELLOW}Base URL: $BASE_URL${NC}"
 echo ""
 
