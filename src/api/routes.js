@@ -450,6 +450,21 @@ router.get('/scenes/:videoId', (req, res) => {
       padding: 30px 20px;
       text-align: center;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    .back-link {
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: white;
+      text-decoration: none;
+      font-size: 1.2em;
+      opacity: 0.9;
+      transition: opacity 0.2s;
+    }
+    .back-link:hover {
+      opacity: 1;
     }
     .header h1 {
       font-size: 2em;
@@ -609,6 +624,7 @@ router.get('/scenes/:videoId', (req, res) => {
 </head>
 <body>
   <div class="header">
+    <a href="/articles/${videoId}" class="back-link">← Back to Article</a>
     <h1>🎬 Scene Viewer</h1>
     <p>Video ID: ${videoId}</p>
   </div>

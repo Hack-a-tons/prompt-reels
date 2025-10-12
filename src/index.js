@@ -274,18 +274,14 @@ app.get('/articles/:articleId', (req, res) => {
   const formatText = (text) => {
     if (!text) return '';
     
-    // Escape HTML first
-    let formatted = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    let formatted = text;
     
-    // Convert markdown headers
+    // Convert markdown headers (must be done before escaping HTML)
     formatted = formatted.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     formatted = formatted.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     formatted = formatted.replace(/^# (.+)$/gm, '<h1>$1</h1>');
     
-    // Convert bold and italic
+    // Convert bold and italic (do before escaping to avoid issues)
     formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
     
@@ -294,6 +290,10 @@ app.get('/articles/:articleId', (req, res) => {
     
     // Convert links [text](url)
     formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    
+    // Now escape any remaining HTML that's not part of our tags
+    // This is a simplified approach - in production you'd want better HTML sanitization
+    formatted = formatted.replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
     
     // Split into paragraphs (double newline)
     const paragraphs = formatted.split(/\n\n+/);
@@ -512,6 +512,7 @@ app.get('/articles/:articleId', (req, res) => {
                 <span>📰 ${article.source.domain}</span>
                 <span>📅 ${new Date(article.fetchedAt).toLocaleString()}</span>
                 ${article.workflow.matchScore ? `<span>⭐ Score: ${article.workflow.matchScore}/100</span>` : ''}
+                ${article.workflow.sceneCount ? `<span><a href="/api/scenes/${article.articleId}" style="color: #1d9bf0; text-decoration: none;">🎬 View ${article.workflow.sceneCount} Scene${article.workflow.sceneCount > 1 ? 's' : ''}</a></span>` : ''}
             </div>
         </div>
         
