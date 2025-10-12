@@ -25,7 +25,7 @@ const config = {
   },
 
   // File upload
-  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '100000000'), // 100MB
+  maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '209715200'), // 200MB (200 * 1024 * 1024)
   uploadDir: process.env.UPLOAD_DIR || './uploads',
 
   // Output
