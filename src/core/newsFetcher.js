@@ -202,6 +202,7 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
   // Exponential backoff: try 3, 6, 12, 24, 48, 96 articles
   const retryLimits = [3, 6, 12, 24, 48, 96];
   let totalChecked = 0;
+  const checkedUrls = new Set(); // Track URLs we've already checked
   
   for (const maxResults of retryLimits) {
     log.info(`Trying Tavily with ${maxResults} articles...`);
@@ -216,10 +217,20 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
     }
 
     // Step 2: Try to extract video from articles
+    let newArticlesInBatch = 0;
     for (let i = 0; i < articles.length; i++) {
       const article = articles[i];
+      
+      // Skip if we've already checked this URL
+      if (checkedUrls.has(article.url)) {
+        log.debug(`Skipping already checked: ${article.url}`);
+        continue;
+      }
+      
+      checkedUrls.add(article.url);
       totalChecked++;
-      log.info(`Checking article ${totalChecked} (${i + 1}/${articles.length} in batch): ${article.title.substring(0, 50)}...`);
+      newArticlesInBatch++;
+      log.info(`Checking article ${totalChecked} (${newArticlesInBatch} new in batch): ${article.title.substring(0, 50)}...`);
       log.debug(`URL: ${article.url}`);
 
       try {
@@ -296,10 +307,14 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
     }
     
     // If we didn't find a video in this batch, try next batch size
-    log.warn(`No videos found in ${articles.length} articles, trying larger batch...`);
+    const skipped = articles.length - newArticlesInBatch;
+    if (skipped > 0) {
+      log.info(`Skipped ${skipped} duplicate articles from previous batches`);
+    }
+    log.warn(`No videos found in ${newArticlesInBatch} new articles, trying larger batch...`);
   }
 
-  throw new Error(`No articles with downloadable videos found after checking ${totalChecked} articles`);
+  throw new Error(`No articles with downloadable videos found after checking ${totalChecked} unique articles`);
 };
 
 module.exports = {
