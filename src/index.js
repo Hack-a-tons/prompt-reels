@@ -887,12 +887,22 @@ app.get('/prompts', (req, res) => {
       .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
     const untestedVersions = sceneVersions.filter(v => v.performance.samples === 0);
     
-    const matchVersions = []; // Not yet implemented in this JSON structure
+    // Same prompts are used for both scene description and video-article match
+    // They're evaluated on the same data during FPO
+    const matchVersions = sceneVersions.map(v => ({
+      ...v,
+      // Mark these as match prompts for display
+      type: 'match'
+    }));
+    
+    // Sort match versions the same way
+    const testedMatchVersions = matchVersions.filter(v => v.performance.samples > 0)
+      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    const untestedMatchVersions = matchVersions.filter(v => v.performance.samples === 0);
     
     // Combine tested and untested
     const sortedSceneVersions = [...testedVersions, ...untestedVersions];
-    
-    const sortedMatchVersions = matchVersions;
+    const sortedMatchVersions = [...testedMatchVersions, ...untestedMatchVersions];
     
     const html = `
 <!DOCTYPE html>
@@ -1088,11 +1098,14 @@ app.get('/prompts', (req, res) => {
             <h3>How Prompt Ranking Works</h3>
             <p><strong>Score = Semantic Similarity</strong> between AI output and ground truth (0-1 scale, shown as 0-100).</p>
             <p style="margin-top: 10px;">
-                <strong>Scene Description:</strong> We compare AI-generated scene descriptions to article text using cosine similarity of embeddings. Higher scores mean the AI describes scenes more accurately.<br>
-                <strong>Video-Article Match:</strong> We evaluate how well the AI rates video-article relevance. Scores reflect consistency and accuracy of match ratings.
+                <strong>Same Prompts, Different Tasks:</strong> The prompts below are used for both scene description and video-article matching. During FPO evaluation, each prompt is tested on actual article data (video frames + article text) to measure how well it performs at generating accurate descriptions and match ratings.
             </p>
             <p style="margin-top: 10px;">
-                Prompts are sorted <strong>best to worst</strong> based on average performance across multiple samples. Improvement percentages show gains over the baseline (first version).
+                <strong>Scene Description:</strong> AI describes what's happening in video frames. Compared to article text via semantic similarity.<br>
+                <strong>Video-Article Match:</strong> AI rates how well video matches article content (0-100 score).
+            </p>
+            <p style="margin-top: 10px;">
+                Prompts are sorted <strong>best to worst</strong> based on average performance across multiple samples. Improvement percentages show gains over the baseline.
             </p>
         </div>
         
