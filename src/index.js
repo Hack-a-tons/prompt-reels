@@ -184,7 +184,7 @@ app.get('/', (req, res) => {
                 <tr>
                     <td>
                         <div class="title">
-                            <a href="/api/articles/${article.articleId}" target="_blank">${article.title}</a>
+                            <a href="/articles/${article.articleId}">${article.title}</a>
                         </div>
                     </td>
                     <td>${article.source}</td>
@@ -235,6 +235,295 @@ app.get('/', (req, res) => {
             
             try {
                 const res = await fetch(\`/api/articles/\${articleId}/rate\`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(\`Rated: \${data.matchScore}/100\`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+    </script>
+</body>
+</html>
+  `;
+  
+  res.send(html);
+});
+
+// Article detail HTML page
+app.get('/articles/:articleId', (req, res) => {
+  const { getArticleDetails } = require('./core/articleWorkflow');
+  const { articleId } = req.params;
+  const article = getArticleDetails(articleId);
+  
+  if (!article) {
+    return res.status(404).send('<h1>Article not found</h1>');
+  }
+  
+  const videoUrl = article.video.localPath 
+    ? `/${article.video.localPath}`
+    : article.video.url;
+  
+  const hasLocalVideo = !!article.video.localPath;
+  
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${article.title} - Prompt Reels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e7e9ea;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .back-link {
+            display: inline-block;
+            color: #1d9bf0;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .article-header {
+            background: #16181c;
+            border: 1px solid #2f3336;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .status-fetched { background: #1d4ed8; color: #dbeafe; }
+        .status-described { background: #7c3aed; color: #ede9fe; }
+        .status-rated { background: #059669; color: #d1fae5; }
+        h1 { font-size: 32px; margin-bottom: 15px; }
+        .meta {
+            display: flex;
+            gap: 20px;
+            color: #71767b;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .video-container {
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        video {
+            width: 100%;
+            max-height: 600px;
+            display: block;
+        }
+        .no-video {
+            padding: 60px;
+            text-align: center;
+            background: #16181c;
+            border: 2px dashed #2f3336;
+            border-radius: 12px;
+            color: #71767b;
+        }
+        .content-section {
+            background: #16181c;
+            border: 1px solid #2f3336;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .content-section h2 {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #1d9bf0;
+        }
+        .description {
+            color: #e7e9ea;
+            white-space: pre-wrap;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .info-card {
+            background: #1c1f23;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .info-label {
+            color: #71767b;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .info-value {
+            color: #e7e9ea;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 1px solid #2f3336;
+            background: #1d9bf0;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover { background: #1a8cd8; }
+        .btn-secondary {
+            background: #16181c;
+            color: #e7e9ea;
+        }
+        .btn-secondary:hover { background: #1c1f23; border-color: #1d9bf0; }
+        .scenes-link {
+            color: #1d9bf0;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .scenes-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Dashboard</a>
+        
+        <div class="article-header">
+            <span class="status-badge status-${article.workflow.status}">${article.workflow.status}</span>
+            <h1>${article.title}</h1>
+            <div class="meta">
+                <span>📰 ${article.source.domain}</span>
+                <span>📅 ${new Date(article.fetchedAt).toLocaleString()}</span>
+                ${article.workflow.matchScore ? `<span>⭐ Score: ${article.workflow.matchScore}/100</span>` : ''}
+            </div>
+        </div>
+        
+        ${hasLocalVideo ? `
+        <div class="video-container">
+            <video controls autoplay>
+                <source src="${videoUrl}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        ` : `
+        <div class="no-video">
+            <h2>📹 Video Not Downloaded</h2>
+            <p>This article has an embedded video that wasn't downloaded.</p>
+            <p style="margin-top: 10px; color: #71767b;">Type: ${article.video.type} | Platform: ${article.video.platform || 'N/A'}</p>
+            ${article.video.url ? `<p style="margin-top: 10px;"><a href="${article.video.url}" target="_blank" style="color: #1d9bf0;">View original video</a></p>` : ''}
+        </div>
+        `}
+        
+        <div class="info-grid">
+            <div class="info-card">
+                <div class="info-label">Status</div>
+                <div class="info-value">${article.workflow.status}</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">Video Type</div>
+                <div class="info-value">${article.video.type}</div>
+            </div>
+            ${article.workflow.sceneCount ? `
+            <div class="info-card">
+                <div class="info-label">Scenes</div>
+                <div class="info-value">${article.workflow.sceneCount}</div>
+            </div>
+            ` : ''}
+            ${article.workflow.matchScore ? `
+            <div class="info-card">
+                <div class="info-label">Match Score</div>
+                <div class="info-value">${article.workflow.matchScore}/100</div>
+            </div>
+            ` : ''}
+        </div>
+        
+        ${article.description ? `
+        <div class="content-section">
+            <h2>Description</h2>
+            <div class="description">${article.description}</div>
+        </div>
+        ` : ''}
+        
+        ${article.text && article.text !== article.description ? `
+        <div class="content-section">
+            <h2>Full Article Text</h2>
+            <div class="description">${article.text.substring(0, 2000)}${article.text.length > 2000 ? '...' : ''}</div>
+        </div>
+        ` : ''}
+        
+        <div class="content-section">
+            <h2>Actions</h2>
+            <div class="actions">
+                ${article.workflow.status === 'fetched' && hasLocalVideo ? `
+                    <button class="btn" onclick="describeArticle()">Describe Scenes</button>
+                ` : ''}
+                ${article.workflow.status === 'described' ? `
+                    <a href="/api/scenes/${article.articleId}" class="btn" target="_blank">View Scenes</a>
+                    <button class="btn" onclick="rateArticle()">Rate Match</button>
+                ` : ''}
+                ${article.workflow.status === 'rated' ? `
+                    <a href="/api/scenes/${article.articleId}" class="btn" target="_blank">View Scenes</a>
+                ` : ''}
+                <a href="${article.source.url}" class="btn btn-secondary" target="_blank">View Original Article</a>
+                <a href="/api/articles/${article.articleId}" class="btn btn-secondary" target="_blank">View JSON</a>
+            </div>
+        </div>
+        
+        ${article.sceneData ? `
+        <div class="content-section">
+            <h2>Scene Analysis</h2>
+            <p>This article has been analyzed. <a href="/api/scenes/${article.articleId}" class="scenes-link">View detailed scene descriptions →</a></p>
+        </div>
+        ` : ''}
+    </div>
+    
+    <script>
+        async function describeArticle() {
+            if (!confirm('Describe scenes for this article? This may take a few minutes.')) return;
+            
+            try {
+                const res = await fetch('/api/articles/${article.articleId}/describe', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(\`Success! Found \${data.sceneCount} scenes.\`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+        
+        async function rateArticle() {
+            if (!confirm('Rate video-article match? This uses AI to analyze.')) return;
+            
+            try {
+                const res = await fetch('/api/articles/${article.articleId}/rate', { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
                     alert(\`Rated: \${data.matchScore}/100\`);
