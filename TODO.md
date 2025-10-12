@@ -1,185 +1,231 @@
-# Common TODO — Prompt Reels (Gemini Edition)
+# TODO — Prompt Reels
 
-## Project Goal
-Create a self-improving video analysis pipeline that splits videos into scenes, generates AI-based descriptions using **Google Gemini**, and iteratively improves its prompt templates through a simplified **Federated Prompt Optimization (FPO)** approach. The system must log all experiments in **W&B Weave**.
+## Project Status: FEATURE COMPLETE ✅
 
----
+A self-improving video analysis system with **scene detection**, **AI-powered descriptions**, and **federated prompt optimization (FPO)** with genetic evolution. Fully deployed on production.
 
-## Detailed Development Plan
-(Updated to reflect new architecture and tool usage)
-
-### Phase 1 — Repository & Environment Setup ✅
-- [x] Initialize GitHub repo and push initial files.
-- [x] Create `.env.example` with `GOOGLE_API_KEY` and `WANDB_API_KEY`.
-- [x] Install dependencies: `express`, `ffmpeg-static`, `@google/generative-ai`, `cosine-similarity`.
-- [x] Setup folder structure (`src/api`, `src/core`, `data`, `output`).
-- [x] Created Weave logging system (file-based).
-- [x] Integrated W&B Weave SDK with cloud logging.
-- [x] Created `test.sh` script with `-v` and `-p` flags.
-- [x] Created `Dockerfile` and `compose.yml` for production.
-- [x] Server running on port 15000 with health check.
-- [x] Basic API endpoints: upload, analyze, prompts, FPO.
-- [x] Deployed to production (reels.hurated.com).
-
-### Phase 2 — Core API Server
-- [ ] Test video upload endpoint with `multer` (already implemented).
-- [ ] Test ffmpeg extraction (`1 frame / 3 seconds`) with real video.
-- [ ] Test Gemini API to describe each frame.
-- [ ] Save results as `scene_descriptions.json`.
-- [ ] Log every run to Weave with prompt version and timestamp.
-- [ ] Find 3-5 short test videos (Pexels, Pixabay, Reuters) for different domains.
-- [ ] Create `data/reference.json` with ground-truth descriptions for evaluation.
-
-### Phase 3 — Prompt Optimization Loop (FPO) ✅
-- [x] Create 3–5 prompt templates (`data/prompts.json`).
-- [x] Simulate 3 domains (news, sports, reels) as federated clients.
-- [x] Evaluate prompt performance with Gemini and embedding similarity.
-- [x] Aggregate results → update prompt weights.
-- [x] Log improvements and trends in Weave dashboard.
-- [x] Implement genetic crossover for prompt evolution.
-- [x] Track generation numbers and parent lineage.
-- [x] Create evolve.sh management script.
-
-### Phase 4 — Optional Integrations
-- [ ] **Tavily** → fetch article text for reference descriptions.
-- [ ] **BrowserBase** → scrape YouTube/Reuters captions for scoring.
-
-### Phase 5 — Client Application
-- [ ] Build minimal web UI (React/Svelte).
-- [ ] Upload video, display scene captions.
-- [ ] Embed Weave charts to show improvement curve.
-
-### Phase 6 — Testing & Presentation
-- [ ] Validate 3–5 test videos across domains (news, sports, reels).
-- [ ] Record demo (upload → description → prompt evolution).
-- [ ] Create presentation slides (Problem, Solution, Demo, Results).
-- [ ] Include Weave dashboard screenshots and "prompt improvement" chart.
-- [ ] Write demo script (≤ 1 min spoken narration).
-- [ ] Prepare submission text (Project summary, Tech stack, Prizes targeted).
-- [ ] Submit to hackathon portal before 1:30 pm Sunday.
-- [ ] Post demo clip on X for "Viral on X" prize.
+**Last Updated**: October 12, 2025  
+**Repository**: `git@github.com:Hack-a-tons/prompt-reels.git`  
+**Production**: https://api.reels.hurated.com  
+**Port**: 15000
 
 ---
 
-## Next Steps - FPO Improvements
+## ✅ Completed Features
 
-### High Priority
-- [ ] **Scene-based frame extraction** ← IN PROGRESS
-  - [ ] Detect scene changes using ffmpeg (scene filter)
-  - [ ] Return JSON with scene timestamps (start, end)
-  - [ ] Extract 3 frames per scene (beginning, middle, end)
-  - [ ] Analyze 3 frames together for better context
-  - [ ] API endpoint: POST /api/detect-scenes
-  - [ ] Bash script: scripts/detect-scenes.sh
-  - **Impact**: Significantly improves data quality and scoring accuracy
+### Core Infrastructure
+- [x] Express API server with health checks
+- [x] Docker deployment (`docker compose up -d`)
+- [x] Production deployment (reels.hurated.com)
+- [x] Nginx configuration with 200MB upload limit
+- [x] W&B Weave integration for experiment tracking
+- [x] Azure OpenAI + Gemini dual-provider support
+- [x] Comprehensive test suite (`./test.sh`)
+- [x] 13+ bash scripts for automation
 
+### Video Processing & Scene Detection
+- [x] **Video upload** - multer-based with 200MB limit
+- [x] **Scene detection** - ffmpeg scene filter for timestamps
+- [x] **Frame extraction** - 3 frames per scene (beginning/middle/end)
+- [x] **AI descriptions** - Multi-frame analysis with Azure/Gemini
+- [x] **Visual scene viewer** - Beautiful HTML page with video player
+- [x] **Scene JSON API** - Structured data for programmatic access
+- [x] **Static file serving** - Videos and frames accessible via URL
+
+### Scripts & Automation
+- [x] `upload.sh` - Upload videos to API
+- [x] `list.sh` - List uploaded videos with scene status
+- [x] `detect-scenes.sh` - Fast scene timestamp detection
+- [x] `describe-scenes.sh` - Extract frames + AI descriptions
+- [x] `detected.sh` - Show scene detection status
+- [x] `deploy.sh` - Deploy to production with Docker rebuild
+- [x] `cleanup.sh` - Clean output and upload directories
+- [x] `evolve.sh` - Manage FPO evolution (start/stop/status)
+- [x] `show-prompts.sh` - Display prompt templates
+- [x] `reset-prompts.sh` - Reset prompts to default state
+- [x] `fix-nginx-upload-limit.sh` - Guide for nginx config
+- [x] `free-port.sh` - Kill process on port
+- [x] `run-dev.sh` - Start dev server with nodemon
+
+### Federated Prompt Optimization (FPO)
+- [x] 5+ prompt templates with performance tracking
+- [x] Genetic evolution with crossover and mutation
+- [x] Multi-domain simulation (news, sports, reels)
+- [x] Weave logging for all evaluations
+- [x] Weight-based prompt selection
+- [x] Generation tracking and parent lineage
+- [x] `/api/fpo/run` and `/api/fpo/status` endpoints
+
+### Scene Viewer Features
+- [x] Auto-playing video with scenes
+- [x] 3 frames per scene displayed
+- [x] AI-generated scene descriptions
+- [x] Click timestamp to seek video
+- [x] Auto-highlight current scene during playback
+- [x] Responsive mobile-friendly design
+- [x] Modern gradient UI with smooth animations
+
+---
+
+## 🔌 API Endpoints
+
+| Method | Endpoint | Purpose | Status |
+|--------|----------|---------|--------|
+| GET | `/health` | Health check | ✅ |
+| POST | `/api/upload` | Upload video | ✅ |
+| POST | `/api/analyze` | Analyze video frames | ✅ |
+| POST | `/api/detect-scenes` | Detect scenes + extract frames | ✅ |
+| GET | `/api/scenes/:videoId` | Visual scene viewer (HTML) | ✅ |
+| GET | `/api/scenes/:videoId/json` | Scene data (JSON) | ✅ |
+| GET | `/api/prompts` | Get all prompt templates | ✅ |
+| GET | `/api/results/:videoId` | Get analysis results | ✅ |
+| POST | `/api/fpo/run` | Run FPO optimization | ✅ |
+| GET | `/api/fpo/status` | Get FPO status & weights | ✅ |
+
+---
+
+## 🧪 Testing
+
+**Test Suite**: `./test.sh` with comprehensive coverage
+
+```bash
+# Test individual features
+./test.sh health              # Health check
+./test.sh upload              # Video upload
+./test.sh detect-scenes       # Scene detection
+./test.sh describe-scenes     # Frame extraction + AI
+./test.sh scenes-viewer       # Scene viewer endpoints
+./test.sh prompts             # Prompt management
+./test.sh fpo                 # FPO optimization
+
+# Test all features
+./test.sh all                 # Run complete test suite
+./test.sh -v all              # With verbose output
+./test.sh -p5 all             # With 5-second pause between tests
+./test.sh all dev             # Test local dev server
+```
+
+**All tests pass** ✅
+
+---
+
+## 📋 Complete Workflow Example
+
+```bash
+# 1. Upload video
+./scripts/upload.sh ~/Downloads/video.mp4
+# Returns: video-1760239791824-656504757
+
+# 2. Detect scenes (fast - timestamps only)
+./scripts/detect-scenes.sh video-1760239791824-656504757
+# Output: 21 scenes detected with start/end times
+
+# 3. Extract frames + AI descriptions (slower)
+./scripts/describe-scenes.sh video-1760239791824-656504757
+# Output: 63 frames + 21 AI descriptions
+
+# 4. View in browser
+# https://api.reels.hurated.com/api/scenes/video-1760239791824-656504757
+
+# 5. Check status
+./scripts/list.sh              # List all videos with scene status
+./scripts/detected.sh          # Show detected scenes
+
+# 6. Deploy changes
+./scripts/deploy.sh            # Deploy to production
+```
+
+---
+
+## 📝 Remaining Tasks (Optional Enhancements)
+
+### Future Improvements
 - [ ] **Multiple test videos per domain**
   - Create `data/test-videos/{news,sports,reels}` structure
   - Add domain-specific test videos with proper reference texts
   - Use all uploaded videos instead of just latest
-  - **Impact**: Better evaluation coverage across content types
 
 - [ ] **Dashboard endpoint**
   - Create `/api/fpo/dashboard` with statistics
   - Show: avg score, min/max, trends, evaluation count
   - Add simple HTML visualization
-  - **Impact**: Easy to see current best prompt and trends
-
-### Medium Priority
-- [x] **Real W&B Weave integration** ✅
-  - Installed `@wandb/sdk`
-  - Implemented cloud logging with file fallback
-  - View experiments at https://wandb.ai/prompt-reels
-  - **Impact**: Better visualization and collaboration
 
 - [ ] **Analysis script for local logs**
   - Create `scripts/analyze-weave-logs.js`
   - Group evaluations by prompt
   - Show performance trends over time
-  - **Impact**: Understand current data without W&B cloud
+
+- [ ] **Client Application**
+  - Build minimal web UI (React/Svelte)
+  - Upload interface with drag-and-drop
+  - Embed Weave charts to show improvement curve
+
+- [ ] **External Integrations**
+  - Tavily → fetch article text for reference descriptions
+  - BrowserBase → scrape YouTube/Reuters captions for scoring
 
 ### Stretch Goals
 - [ ] Real-time Weave visualization updates
 - [ ] Deploy on Google Cloud Run
-- [ ] Integrate multiple Gemini model variants (e.g., `gemini-2.5-pro`, `gemini-2.5-flash`)
+- [ ] Integrate multiple Gemini model variants (gemini-2.5-flash)
 - [ ] Add feedback scoring UI
 - [ ] Post demo to X for "Viral on X" prize
 
 ---
 
-## Current Status
+## 📚 Documentation Files
 
-**Last Updated**: October 11, 2025  
-**Repository**: `git@github.com:Hack-a-tons/prompt-reels.git`  
-**Port**: 15000 (available on production server)  
-**Domain**: reels.hurated.com
-
-### What's Working
-- Express API server on port 15000
-- Health check: `GET /health`
-- API endpoints: upload, analyze, prompts, FPO
-- Weave logging to `output/weave-logs/` (JSONL format)
-- Test script: `./test.sh` with `-v` and `-p` flags
-- Docker ready: `docker compose up -d`
-- Gemini + Azure OpenAI fallback configured
-
-### API Endpoints
-| Method | Endpoint | Status |
-|--------|----------|--------|
-| GET | `/health` | Working |
-| POST | `/api/upload` | Ready |
-| POST | `/api/analyze` | Ready |
-| GET | `/api/prompts` | Working |
-| GET | `/api/results/:videoId` | Ready |
-| POST | `/api/fpo/run` | Ready |
-| GET | `/api/fpo/status` | Ready |
-
-### Test Results
-```bash
-./test.sh health -v     # Returns 200 with config
-./test.sh prompts -v    # Returns 5 templates
-```
+**README.md** - Complete user guide with all scripts and workflows ✅  
+**TODO.md** - This file - project status and roadmap ✅  
+**nginx.conf.example** - Nginx configuration template ✅  
+**.env.example** - Environment variables template ✅  
 
 ---
 
-## Git Commit
+## 🔧 Technical Notes
 
-Ready to commit Phase 1:
-```bash
-git add .
-git commit -m "Phase 1: Complete basic infrastructure
+- **Port**: 15000 (production and dev)
+- **Upload Limit**: 200MB (nginx + application)
+- **Video Formats**: MP4 (extensible to others)
+- **AI Providers**: Azure OpenAI (primary), Gemini (fallback)
+- **Scene Detection**: ffmpeg scene filter (threshold: 0.4)
+- **Frame Extraction**: 3 frames per scene (10%, 50%, 90%)
+- **Logging**: W&B Weave + local JSONL fallback
+- **Docker**: Multi-stage build with ffmpeg support
 
-- Set up Express API server with health check
-- Integrate Google Gemini for image description  
-- Implement video processing with ffmpeg
-- Create FPO (Federated Prompt Optimization) system
-- Add Weave logging for experiment tracking
-- Configure Docker deployment with compose.yml
-- Create test.sh script with -v and -p flags
-- Add Azure OpenAI as fallback option
-- Port 15000, domain: reels.hurated.com"
+### Important Files
+- `data/prompts.json` - Runtime state (accumulates performance history)
+- `output/weave-logs/` - Local experiment logs (JSONL)
+- `output/video-*_scenes.json` - Scene detection results
+- `output/video-*_scenes/` - Extracted frames
+- `uploads/video-*.mp4` - Uploaded videos
 
-git push origin main
-```
-
-### Files to Commit
-- Configuration: `.env.example`, `.gitignore`, `.dockerignore`
-- Code: `package.json`, `src/`, `data/`
-- Deployment: `Dockerfile`, `compose.yml`
-- Testing: `test.sh`
-- Docs: `README.md`, `TODO.md`
+### Nodemon Configuration
+Ignores: `data/`, `uploads/`, `output/` to prevent restarts during processing
 
 ---
 
-## Notes
-- `.env` gitignored (contains real API keys)
-- Weave: File-based logging (JSONL) until official SDK integrated
-- ffmpeg: Bundled via ffmpeg-static
-- Video uploads: 100MB limit (configurable)
-- Test flags: `-pv`, `-vp`, `-p5`, etc. all work
-- Keep code lightweight and modular
-- Test videos and reference data go in `/data/`
-- Presentation materials go in `/slides/`
-- Save all output under `/output/` for demo
-- **Important:** `data/prompts.json` is runtime state (accumulates performance history). Use `npm run reset-prompts` before committing for clean state
-- **Nodemon:** Configured to ignore `data/`, `uploads/`, `output/` to prevent restarts during FPO runs and video processing
+## 🚀 Deployment
+
+**Production Server**: reels.hurated.com  
+**Deploy Command**: `./scripts/deploy.sh`  
+**Health Check**: https://api.reels.hurated.com/health
+
+**Deployment includes**:
+- Git pull on production server
+- Docker compose build
+- Container restart
+- Health check verification
+
+---
+
+## 🎯 Project Goals (Achieved)
+
+✅ Create a self-improving video analysis pipeline  
+✅ Split videos into scenes with AI descriptions  
+✅ Implement Federated Prompt Optimization (FPO)  
+✅ Use Gemini for image analysis  
+✅ Log all experiments in W&B Weave  
+✅ Provide beautiful visual scene viewer  
+✅ Comprehensive automation via bash scripts  
+✅ Production-ready deployment

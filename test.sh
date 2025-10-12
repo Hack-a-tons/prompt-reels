@@ -41,6 +41,9 @@ show_help() {
     echo "  health                  Test health check endpoint"
     echo "  upload                  Test video upload endpoint"
     echo "  analyze                 Test video analysis endpoint"
+    echo "  detect-scenes           Test scene detection (timestamps only)"
+    echo "  describe-scenes         Test scene description (frames + AI)"
+    echo "  scenes-viewer           Test scene viewer endpoints"
     echo "  prompts                 Test prompt management endpoints"
     echo "  fpo                     Test federated prompt optimization"
     echo ""
@@ -51,6 +54,7 @@ show_help() {
     echo "  ./test.sh -v health dev   Run health test on dev with verbose"
     echo "  ./test.sh -pv all prod  Run all tests with pause (30s) and verbose on prod"
     echo "  ./test.sh -p5 upload    Run upload test, pause 5s after"
+    echo "  ./test.sh detect-scenes Test scene detection"
     echo "  ./test.sh prompts dev   Test prompts on dev"
     echo ""
 }
@@ -187,12 +191,69 @@ test_fpo() {
     api_call "GET" "/api/fpo/status" "" "Get FPO status"
 }
 
+test_detect_scenes() {
+    if [ -z "$LAST_VIDEO_ID" ]; then
+        echo -e "${YELLOW}Note: This test requires a valid VIDEO_ID from upload${NC}"
+        echo -e "${YELLOW}Running test_upload first...${NC}"
+        echo ""
+        test_upload
+        echo ""
+    fi
+    
+    if [ -n "$LAST_VIDEO_ID" ]; then
+        api_call "POST" "/api/detect-scenes" "{\"videoId\":\"$LAST_VIDEO_ID\",\"threshold\":0.4,\"extractFrames\":false,\"describeScenes\":false}" "Detect scenes (timestamps only)"
+    else
+        echo -e "${RED}✗ No video ID available. Please run upload test first.${NC}"
+    fi
+}
+
+test_describe_scenes() {
+    if [ -z "$LAST_VIDEO_ID" ]; then
+        echo -e "${YELLOW}Note: This test requires a valid VIDEO_ID from upload${NC}"
+        echo -e "${YELLOW}Running test_upload first...${NC}"
+        echo ""
+        test_upload
+        echo ""
+    fi
+    
+    if [ -n "$LAST_VIDEO_ID" ]; then
+        echo -e "${YELLOW}Note: This test may take several minutes for AI descriptions${NC}"
+        api_call "POST" "/api/detect-scenes" "{\"videoId\":\"$LAST_VIDEO_ID\",\"threshold\":0.4,\"extractFrames\":true,\"describeScenes\":true}" "Describe scenes (frames + AI)"
+    else
+        echo -e "${RED}✗ No video ID available. Please run upload test first.${NC}"
+    fi
+}
+
+test_scenes_viewer() {
+    if [ -z "$LAST_VIDEO_ID" ]; then
+        echo -e "${YELLOW}Note: This test requires a valid VIDEO_ID with detected scenes${NC}"
+        echo -e "${YELLOW}Running test_detect_scenes first...${NC}"
+        echo ""
+        test_detect_scenes
+        echo ""
+    fi
+    
+    if [ -n "$LAST_VIDEO_ID" ]; then
+        api_call "GET" "/api/scenes/$LAST_VIDEO_ID" "" "Get scene viewer (HTML)"
+        do_pause
+        api_call "GET" "/api/scenes/$LAST_VIDEO_ID/json" "" "Get scene data (JSON)"
+    else
+        echo -e "${RED}✗ No video ID available. Please run upload test first.${NC}"
+    fi
+}
+
 test_all() {
     test_health
     do_pause
     test_upload
     do_pause
     test_analyze
+    do_pause
+    test_detect_scenes
+    do_pause
+    test_describe_scenes
+    do_pause
+    test_scenes_viewer
     do_pause
     test_prompts
     do_pause
@@ -246,7 +307,7 @@ while [[ $# -gt 0 ]]; do
             ENVIRONMENT=$1
             shift
             ;;
-        all|health|upload|analyze|prompts|fpo)
+        all|health|upload|analyze|detect-scenes|describe-scenes|scenes-viewer|prompts|fpo)
             TEST_NAME=$1
             shift
             ;;
@@ -289,6 +350,15 @@ case $TEST_NAME in
         ;;
     analyze)
         test_analyze
+        ;;
+    detect-scenes)
+        test_detect_scenes
+        ;;
+    describe-scenes)
+        test_describe_scenes
+        ;;
+    scenes-viewer)
+        test_scenes_viewer
         ;;
     prompts)
         test_prompts
