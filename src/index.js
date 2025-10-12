@@ -270,19 +270,44 @@ app.get('/articles/:articleId', (req, res) => {
   
   const hasLocalVideo = !!article.video.localPath;
   
-  // Simple text formatter (handles newlines and basic formatting)
+  // Simple text formatter (handles newlines and basic markdown)
   const formatText = (text) => {
     if (!text) return '';
-    return text
+    
+    // Escape HTML first
+    let formatted = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`(.+?)`/g, '<code>$1</code>')
-      .replace(/^(.+)$/, '<p>$1</p>');
+      .replace(/>/g, '&gt;');
+    
+    // Convert markdown headers
+    formatted = formatted.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    formatted = formatted.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    formatted = formatted.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    
+    // Convert bold and italic
+    formatted = formatted.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    formatted = formatted.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Convert inline code
+    formatted = formatted.replace(/`(.+?)`/g, '<code>$1</code>');
+    
+    // Convert links [text](url)
+    formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    
+    // Split into paragraphs (double newline)
+    const paragraphs = formatted.split(/\n\n+/);
+    
+    return paragraphs.map(para => {
+      // If already a header, return as-is
+      if (para.trim().startsWith('<h')) {
+        return para.trim();
+      }
+      // Convert single newlines to <br>
+      const withBreaks = para.replace(/\n/g, '<br>');
+      // Wrap in paragraph if not empty
+      return withBreaks.trim() ? `<p>${withBreaks.trim()}</p>` : '';
+    }).join('\n');
   };
   
   const html = `
@@ -371,6 +396,22 @@ app.get('/articles/:articleId', (req, res) => {
             color: #e7e9ea;
             line-height: 1.8;
         }
+        .description h1 {
+            font-size: 28px;
+            margin: 25px 0 15px 0;
+            color: #e7e9ea;
+        }
+        .description h2 {
+            font-size: 22px;
+            margin: 20px 0 12px 0;
+            color: #1d9bf0;
+        }
+        .description h3 {
+            font-size: 18px;
+            margin: 18px 0 10px 0;
+            color: #71767b;
+            font-weight: 600;
+        }
         .description p {
             margin-bottom: 15px;
         }
@@ -397,6 +438,16 @@ app.get('/articles/:articleId', (req, res) => {
         }
         .description a:hover {
             text-decoration: underline;
+        }
+        .video-link {
+            display: block;
+            margin-top: 10px;
+            color: #71767b;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        .video-link:hover {
+            color: #1d9bf0;
         }
         .info-grid {
             display: grid;
@@ -471,6 +522,7 @@ app.get('/articles/:articleId', (req, res) => {
                 Your browser does not support the video tag.
             </video>
         </div>
+        <a href="${videoUrl}" class="video-link" target="_blank">🔗 Direct video link: ${videoUrl}</a>
         ` : `
         <div class="no-video">
             <h2>📹 Video Not Downloaded</h2>
