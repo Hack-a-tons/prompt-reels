@@ -880,12 +880,22 @@ router.get('/dashboard', (req, res) => {
  * Add multiple articles (fetch, describe, rate) until target count is reached
  */
 router.post('/articles/batch-add', async (req, res) => {
+  const { setFlag, clearFlag, hasFlag } = require('../utils/flags');
+  
   try {
+    // Check if already processing
+    if (hasFlag('batch-adding')) {
+      return res.status(409).json({ error: 'Batch add already in progress' });
+    }
+    
     const targetCount = req.body.count || 10;
     
     if (targetCount < 1 || targetCount > 100) {
       return res.status(400).json({ error: 'Count must be between 1 and 100' });
     }
+    
+    // Set flag
+    setFlag('batch-adding', { targetCount, startedAt: new Date().toISOString() });
     
     const initialCount = listArticles().length;
     let attempts = 0;
@@ -1024,6 +1034,9 @@ EXPLANATION: [text]`;
     console.log(`\n✓ Batch add complete: ${added} articles added in ${attempts} attempts`);
     console.log(`Final count: ${finalCount}\n`);
     
+    // Clear flag
+    clearFlag('batch-adding');
+    
     res.json({
       success: true,
       added,
@@ -1033,6 +1046,9 @@ EXPLANATION: [text]`;
     });
     
   } catch (error) {
+    // Clear flag on error
+    const { clearFlag } = require('../utils/flags');
+    clearFlag('batch-adding');
     res.status(500).json({ error: error.message });
   }
 });
@@ -1247,8 +1263,17 @@ router.delete('/articles', (req, res) => {
  * Rate how well the video matches the article
  */
 router.post('/articles/:articleId/rate', async (req, res) => {
+  const { setFlag, clearFlag, hasFlag } = require('../utils/flags');
+  
   try {
     const { articleId } = req.params;
+    
+    // Check if already rating this article
+    const flagName = `rating-${articleId}`;
+    if (hasFlag(flagName)) {
+      return res.status(409).json({ error: 'Rating already in progress for this article' });
+    }
+    
     const articleDetails = getArticleDetails(articleId);
     
     if (!articleDetails) {
@@ -1258,6 +1283,9 @@ router.post('/articles/:articleId/rate', async (req, res) => {
     if (!articleDetails.sceneData) {
       return res.status(400).json({ error: 'Article has no scene descriptions yet. Run describe first.' });
     }
+    
+    // Set flag
+    setFlag(flagName, { articleId, startedAt: new Date().toISOString() });
     
     // Rate video-article match using both visual and audio information
     const articleText = articleDetails.text || articleDetails.description;
@@ -1317,6 +1345,9 @@ EXPLANATION: [text]`;
       ratedAt: new Date().toISOString(),
     });
     
+    // Clear flag
+    clearFlag(flagName);
+    
     res.json({
       success: true,
       articleId,
@@ -1324,8 +1355,26 @@ EXPLANATION: [text]`;
       rating,
     });
   } catch (error) {
+    // Clear flag on error
+    const { clearFlag } = require('../utils/flags');
+    if (req.params.articleId) {
+      clearFlag(`rating-${req.params.articleId}`);
+    }
     res.status(500).json({ error: error.message });
   }
+});
+
+/**
+ * GET /api/flags/status
+ * Check if operations are in progress
+ */
+router.get('/flags/status', (req, res) => {
+  const { hasFlag, getFlag } = require('../utils/flags');
+  
+  res.json({
+    batchAdding: hasFlag('batch-adding'),
+    batchAddingData: getFlag('batch-adding'),
+  });
 });
 
 module.exports = router;

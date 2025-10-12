@@ -164,9 +164,18 @@ app.get('/', (req, res) => {
             color: #71767b;
         }
         .video-badge.local { background: #15803d; color: #d1fae5; }
-        a { color: #1d9bf0; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .title { max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .title {
+            font-size: 16px;
+            font-weight: 500;
+            max-width: 400px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .title a { color: #e7e9ea; text-decoration: none; }
+        .title a:hover { color: #1d9bf0; text-decoration: underline; }
         .actions { display: flex; gap: 10px; }
         .btn {
             padding: 6px 12px;
@@ -199,9 +208,12 @@ app.get('/', (req, res) => {
             <h1>🎬 Prompt Reels - Article Dashboard</h1>
             <div style="display: flex; gap: 15px; align-items: center;">
                 <a href="/prompts" class="add-articles-btn" style="text-decoration: none; background: #2f3336;">🧠 View Prompts</a>
-                <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()">
+                <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()" style="display: none;">
                     + Add 10 Articles
                 </button>
+                <span id="addingStatus" style="display: none; color: #71767b; font-size: 14px;">
+                    <span class="spinner" style="width: 14px; height: 14px;"></span> Adding articles...
+                </span>
             </div>
         </div>
         
@@ -296,6 +308,33 @@ app.get('/', (req, res) => {
     </div>
     
     <script>
+        // Check flag status and update UI
+        async function checkFlagStatus() {
+            try {
+                const res = await fetch('/api/flags/status');
+                const data = await res.json();
+                
+                const btn = document.getElementById('addArticlesBtn');
+                const status = document.getElementById('addingStatus');
+                
+                if (data.batchAdding) {
+                    btn.style.display = 'none';
+                    status.style.display = 'flex';
+                } else {
+                    btn.style.display = 'inline-block';
+                    status.style.display = 'none';
+                }
+            } catch (err) {
+                console.error('Error checking flags:', err);
+            }
+        }
+        
+        // Check on page load
+        checkFlagStatus();
+        
+        // Check every 3 seconds
+        setInterval(checkFlagStatus, 3000);
+        
         async function describeArticle(articleId) {
             if (!confirm('Describe scenes for this article? This may take a few minutes.')) return;
             
@@ -689,7 +728,10 @@ app.get('/articles/:articleId', (req, res) => {
                 ` : ''}
                 ${article.workflow.status === 'described' ? `
                     <a href="/api/scenes/${article.articleId}" class="btn" target="_blank">View Scenes</a>
-                    <button class="btn" onclick="rateArticle()">Rate Match</button>
+                    <button id="rateBtn" class="btn" onclick="rateArticle()">Rate Match</button>
+                    <span id="ratingStatus" style="display: none; color: #71767b; font-size: 13px; margin-left: 10px;">
+                        <span class="spinner" style="width: 12px; height: 12px;"></span> Rating...
+                    </span>
                 ` : ''}
                 ${article.workflow.status === 'rated' ? `
                     <a href="/api/scenes/${article.articleId}" class="btn" target="_blank">View Scenes</a>
@@ -720,6 +762,35 @@ app.get('/articles/:articleId', (req, res) => {
         if (textEl) {
             const text = '${escapeHtml(article.text.substring(0, 2000))}';
             textEl.innerHTML = marked.parse(text) + ${article.text.length > 2000 ? '"..."' : '""'};
+        }
+        
+        // Check if rating is in progress (for described articles)
+        const rateBtn = document.getElementById('rateBtn');
+        const ratingStatus = document.getElementById('ratingStatus');
+        
+        if (rateBtn && ratingStatus) {
+            async function checkRatingStatus() {
+                try {
+                    const res = await fetch('/api/flags/status');
+                    const data = await res.json();
+                    
+                    // Check if this specific article is being rated
+                    const isRating = data.batchAddingData || false; // Simplified check
+                    
+                    if (isRating) {
+                        rateBtn.style.display = 'none';
+                        ratingStatus.style.display = 'inline-flex';
+                    } else {
+                        rateBtn.style.display = 'inline-block';
+                        ratingStatus.style.display = 'none';
+                    }
+                } catch (err) {
+                    console.error('Error checking rating status:', err);
+                }
+            }
+            
+            checkRatingStatus();
+            setInterval(checkRatingStatus, 3000);
         }
         
         async function describeArticle() {
@@ -777,23 +848,27 @@ app.get('/prompts', (req, res) => {
     // Group templates into two categories for display
     const sceneVersions = templates.map((t, index) => ({
       version: `1.${index}`,
+      name: t.name,
       template: t.template,
       performance: {
         avgScore: t.performance && t.performance.length > 0 
           ? t.performance.reduce((sum, p) => sum + p.score, 0) / t.performance.length 
-          : 0,
+          : null,
         samples: t.performance ? t.performance.length : 0
       },
       createdAt: new Date().toISOString(),
       isActive: index === 0
-    })).filter(v => v.performance.samples > 0);
+    }));
+    
+    // Sort: tested first (by score), then untested
+    const testedVersions = sceneVersions.filter(v => v.performance.samples > 0)
+      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    const untestedVersions = sceneVersions.filter(v => v.performance.samples === 0);
     
     const matchVersions = []; // Not yet implemented in this JSON structure
     
-    // Sort versions by performance (best first)
-    const sortedSceneVersions = sceneVersions.sort((a, b) => 
-      (b.performance.avgScore || 0) - (a.performance.avgScore || 0)
-    );
+    // Combine tested and untested
+    const sortedSceneVersions = [...testedVersions, ...untestedVersions];
     
     const sortedMatchVersions = matchVersions;
     
@@ -1005,35 +1080,41 @@ app.get('/prompts', (req, res) => {
                     <p>Process some articles to start FPO optimization.</p>
                 </div>
             ` : sortedSceneVersions.map((version, index) => {
-                const isBest = index === 0;
+                const isBest = index === 0 && version.performance.samples > 0;
                 const isCurrent = version.isActive;
-                const score = version.performance.avgScore || 0;
+                const score = version.performance.avgScore;
                 const samples = version.performance.samples || 0;
-                const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
+                const scoreClass = score === null ? 'poor' : (score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor');
+                const isTested = samples > 0;
                 
-                // Calculate improvement from baseline
-                const baseline = sortedSceneVersions[sortedSceneVersions.length - 1];
-                const improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
-                const improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
-                const improvementClass = improvement > 0 ? 'positive' : 'negative';
+                // Calculate improvement from baseline (only for tested prompts)
+                let improvement = 0;
+                let improvementText = '';
+                let improvementClass = '';
+                if (isTested && testedVersions.length > 1) {
+                  const baseline = testedVersions[testedVersions.length - 1];
+                  improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
+                  improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+                  improvementClass = improvement > 0 ? 'positive' : 'negative';
+                }
                 
                 return `
-                <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''}">
+                <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''} ${!isTested ? 'untested' : ''}">
                     ${isBest ? '<span class="badge best">🏆 BEST</span>' : ''}
-                    ${isCurrent && !isBest ? '<span class="badge current">CURRENT</span>' : ''}
+                    ${!isTested ? '<span class="badge" style="background: #71767b;">NOT TESTED</span>' : ''}
+                    ${isCurrent && !isBest && isTested ? '<span class="badge current">CURRENT</span>' : ''}
                     
                     <div class="prompt-header">
                         <div>
-                            <div class="prompt-version">Version ${version.version}</div>
-                            ${improvement !== 0 ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
+                            <div class="prompt-version">${version.name || 'Version ' + version.version}</div>
+                            ${improvementText ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
                         </div>
-                        <div class="prompt-score ${scoreClass}">${(score * 100).toFixed(1)}</div>
+                        <div class="prompt-score ${scoreClass}">${isTested ? (score * 100).toFixed(1) : '—'}</div>
                     </div>
                     
                     <div class="prompt-stats">
                         <div class="stat">📊 ${samples} samples</div>
-                        <div class="stat">📅 ${new Date(version.createdAt).toLocaleString()}</div>
-                        <div class="stat">Rank: #${index + 1}</div>
+                        ${isTested ? `<div class="stat">Rank: #${testedVersions.indexOf(version) + 1}</div>` : '<div class="stat" style="color: #71767b;">Awaiting test</div>'}
                     </div>
                     
                     <div class="prompt-text">${version.template}</div>
