@@ -1,7 +1,7 @@
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
-const wandb = require('@wandb/sdk');
+const { wandb } = require('@wandb/sdk');
 
 let weaveClient = null;
 let wandbRun = null;
