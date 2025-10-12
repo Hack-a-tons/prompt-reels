@@ -76,25 +76,48 @@ if [ -z "$TARGET" ]; then
     exit 0
 fi
 
+# Check if we need sudo (files owned by root from Docker)
+needs_sudo() {
+    local dir=$1
+    if [ -d "$dir" ]; then
+        local first_file=$(find "$dir" -type f 2>/dev/null | head -n 1)
+        if [ -n "$first_file" ] && [ ! -w "$first_file" ]; then
+            return 0  # needs sudo
+        fi
+    fi
+    return 1  # doesn't need sudo
+}
+
 # Functions to clean each target
 clean_articles() {
     echo -e "${YELLOW}Cleaning articles...${NC}"
     local count=0
+    local use_sudo=""
+    
+    # Check if we need sudo
+    if needs_sudo "output/articles" || needs_sudo "uploads/articles"; then
+        echo -e "${YELLOW}⚠ Files owned by root (Docker), using sudo...${NC}"
+        use_sudo="sudo"
+    fi
     
     # Clean output/articles/
     if [ -d "output/articles" ]; then
-        local files=$(find output/articles -type f | wc -l | xargs)
-        rm -rf output/articles/*
-        count=$((count + files))
-        echo -e "${GREEN}✓ Cleaned output/articles/ (removed $files files)${NC}"
+        local files=$(find output/articles -type f 2>/dev/null | wc -l | xargs)
+        if [ "$files" -gt 0 ]; then
+            $use_sudo rm -rf output/articles/*
+            count=$((count + files))
+            echo -e "${GREEN}✓ Cleaned output/articles/ (removed $files files)${NC}"
+        fi
     fi
     
     # Clean uploads/articles/
     if [ -d "uploads/articles" ]; then
-        local files=$(find uploads/articles -type f | wc -l | xargs)
-        rm -rf uploads/articles/*
-        count=$((count + files))
-        echo -e "${GREEN}✓ Cleaned uploads/articles/ (removed $files files)${NC}"
+        local files=$(find uploads/articles -type f 2>/dev/null | wc -l | xargs)
+        if [ "$files" -gt 0 ]; then
+            $use_sudo rm -rf uploads/articles/*
+            count=$((count + files))
+            echo -e "${GREEN}✓ Cleaned uploads/articles/ (removed $files files)${NC}"
+        fi
     fi
     
     if [ $count -eq 0 ]; then
