@@ -39,8 +39,9 @@ show_help() {
     echo "  3. Push to GitHub"
     echo "  4. SSH to production server"
     echo "  5. Pull latest changes"
-    echo "  6. Rebuild and restart Docker container"
-    echo "  7. Show logs (optional)"
+    echo "  6. Build Docker container (fails safely if build errors)"
+    echo "  7. Restart container (only if build succeeded)"
+    echo "  8. Show logs and health check (optional)"
     echo ""
     echo "Examples:"
     echo "  # Quick deploy (auto-commit if changes)"
@@ -176,15 +177,31 @@ if [ "$SKIP_BUILD" = true ]; then
         exit 1
     fi
 else
-    echo -e "${YELLOW}[5/7] Rebuilding and restarting container...${NC}"
-    echo -e "${GRAY}ssh $SERVER \"cd $PROJECT_DIR && docker compose up -d --build\"${NC}"
+    echo -e "${YELLOW}[5/7] Building container...${NC}"
+    echo -e "${GRAY}ssh $SERVER \"cd $PROJECT_DIR && docker compose build\"${NC}"
     
-    BUILD_OUTPUT=$(ssh $SERVER "cd $PROJECT_DIR && docker compose up -d --build" 2>&1)
+    BUILD_OUTPUT=$(ssh $SERVER "cd $PROJECT_DIR && docker compose build" 2>&1)
+    BUILD_EXIT=$?
     
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Container rebuilt and restarted${NC}"
+    if [ $BUILD_EXIT -eq 0 ]; then
+        echo -e "${GREEN}✓ Container built successfully${NC}"
+        
+        # Only restart if build succeeded
+        echo ""
+        echo -e "${YELLOW}[6/7] Restarting container...${NC}"
+        echo -e "${GRAY}ssh $SERVER \"cd $PROJECT_DIR && docker compose up -d\"${NC}"
+        
+        UP_OUTPUT=$(ssh $SERVER "cd $PROJECT_DIR && docker compose up -d" 2>&1)
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Container restarted${NC}"
+        else
+            echo -e "${RED}✗ Restart failed (but old container still running)${NC}"
+            echo "$UP_OUTPUT"
+            exit 1
+        fi
     else
-        echo -e "${RED}✗ Build failed${NC}"
+        echo -e "${RED}✗ Build failed - old container continues running${NC}"
         echo "$BUILD_OUTPUT"
         exit 1
     fi
@@ -193,11 +210,11 @@ fi
 # Step 7: Show logs
 if [ "$SHOW_LOGS" = true ]; then
     echo ""
-    echo -e "${YELLOW}[6/7] Waiting for startup...${NC}"
+    echo -e "${YELLOW}[7/7] Waiting for startup...${NC}"
     sleep 3
     
     echo ""
-    echo -e "${YELLOW}[7/7] Container logs (last 20 lines):${NC}"
+    echo -e "${YELLOW}Container logs (last 20 lines):${NC}"
     echo -e "${GRAY}────────────────────────────────────────${NC}"
     
     ssh $SERVER "cd $PROJECT_DIR && docker compose logs --tail=20"
