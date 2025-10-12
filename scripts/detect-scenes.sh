@@ -32,7 +32,7 @@ show_help() {
     echo "  -t, --threshold NUM     Scene change threshold (0.0-1.0, default: 0.4)"
     echo "                          Lower = more sensitive (more scenes)"
     echo "                          Higher = less sensitive (fewer scenes)"
-    echo "  -f, --frames            Extract 3 frames per scene"
+    echo "  -f, --frames            Extract 3 frames per scene + AI descriptions"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Environment:"
@@ -120,12 +120,13 @@ echo -e "${BLUE}Threshold: $THRESHOLD${NC}"
 echo -e "${BLUE}Extract Frames: $EXTRACT_FRAMES${NC}"
 echo ""
 
-# Build request body
+# Build request body (with scene descriptions if extracting frames)
 request_body=$(cat <<EOF
 {
   "videoId": "$VIDEO_ID",
   "threshold": $THRESHOLD,
-  "extractFrames": $EXTRACT_FRAMES
+  "extractFrames": $EXTRACT_FRAMES,
+  "describeScenes": $EXTRACT_FRAMES
 }
 EOF
 )
@@ -165,7 +166,8 @@ if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
    Start: \(.start)s
    End: \(.end)s
    Duration: \(.duration)s\(if .frames then "
-   Frames: \(.frames | length)" else "" end)
+   Frames: \(.frames | length)" else "" end)\(if .description then "
+   Description: \(.description)" else "" end)
 "'
     
     # Show frame info if extracted

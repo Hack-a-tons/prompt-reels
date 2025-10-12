@@ -271,13 +271,13 @@ Response: {
 }
 
 # Use the script (VIDEO_ID from upload.sh or list.sh)
-./scripts/detect-scenes.sh video-1234567890           # Basic
-./scripts/detect-scenes.sh -f video-1234567890        # With frames
+./scripts/detect-scenes.sh video-1234567890           # Basic (timestamps only)
+./scripts/detect-scenes.sh -f video-1234567890        # With frames + AI descriptions
 ./scripts/detect-scenes.sh -t 0.3 video-1234567890    # Custom threshold
 
 # Complete workflow
 ./scripts/upload.sh video.mp4                         # Returns VIDEO_ID
-./scripts/detect-scenes.sh -f <VIDEO_ID>              # Detect & extract frames
+./scripts/detect-scenes.sh -f <VIDEO_ID>              # Detect, extract frames, describe scenes
 ```
 
 **How it works:**
@@ -286,7 +286,11 @@ Response: {
 - Lower threshold (0.2-0.3): More sensitive, detects subtle changes
 - Higher threshold (0.5-0.6): Less sensitive, only major scene changes
 - Default (0.4): Good balance for most videos
-- Optionally extracts 3 frames per scene (beginning/middle/end)
+- **With `-f` flag:**
+  - Extracts 3 frames per scene (beginning/middle/end)
+  - **Generates AI descriptions** based on the 3 frames
+  - Uses Azure OpenAI or Gemini to analyze scene content
+  - Descriptions saved in JSON and displayed in viewer
 
 ### View Detected Scenes 🎥
 

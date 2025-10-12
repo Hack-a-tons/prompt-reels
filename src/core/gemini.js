@@ -97,6 +97,106 @@ const describeImage = async (imagePath, prompt) => {
 };
 
 /**
+ * Describe a scene based on multiple frames
+ * @param {Array<string>} framePaths - Paths to frame images
+ * @param {number} sceneId - Scene identifier
+ * @param {number} start - Scene start time
+ * @param {number} end - Scene end time
+ */
+const describeScene = async (framePaths, sceneId, start, end) => {
+  try {
+    // Read all frame images
+    const frameData = framePaths.map(path => {
+      const buffer = fs.readFileSync(path);
+      return buffer.toString('base64');
+    });
+
+    const prompt = `Analyze these ${frameData.length} frames from Scene ${sceneId} (${start.toFixed(1)}s - ${end.toFixed(1)}s) of a video. 
+The frames show the beginning, middle, and end of this scene.
+
+Provide a concise 2-3 sentence description of what happens in this scene. Focus on:
+- Main actions or events
+- Key subjects or objects
+- Scene setting or context
+- Any notable changes between the frames
+
+Keep the description clear, factual, and suitable for video analysis.`;
+
+    if (currentProvider === 'azure') {
+      if (!azureClient) {
+        throw new Error('Azure OpenAI client not initialized');
+      }
+      
+      const content = [
+        { type: 'text', text: prompt }
+      ];
+      
+      // Add all frames
+      frameData.forEach(base64 => {
+        content.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${base64}`,
+          },
+        });
+      });
+      
+      const response = await azureClient.chat.completions.create({
+        model: config.azureOpenAI.deploymentName,
+        messages: [
+          {
+            role: 'user',
+            content,
+          },
+        ],
+        max_tokens: 300,
+      });
+      
+      return response.choices[0].message.content;
+    } else {
+      // Use Gemini
+      if (!geminiClient) {
+        throw new Error('Gemini client not initialized');
+      }
+      
+      const model = geminiClient.getGenerativeModel({ model: config.geminiModel });
+      
+      // Build content array with prompt and all images
+      const content = [prompt];
+      frameData.forEach(base64 => {
+        content.push({
+          inlineData: {
+            data: base64,
+            mimeType: 'image/jpeg',
+          },
+        });
+      });
+      
+      const result = await model.generateContent(content);
+      const response = await result.response;
+      return response.text();
+    }
+  } catch (error) {
+    console.error(`Error describing scene ${sceneId} with ${currentProvider}:`, error.message);
+    
+    // Try fallback provider
+    const fallbackProvider = currentProvider === 'azure' ? 'gemini' : 'azure';
+    const fallbackClient = fallbackProvider === 'azure' ? azureClient : geminiClient;
+    
+    if (fallbackClient) {
+      console.log(`Switching to ${fallbackProvider} for scene description`);
+      const prevProvider = currentProvider;
+      currentProvider = fallbackProvider;
+      const result = await describeScene(framePaths, sceneId, start, end);
+      currentProvider = prevProvider; // Restore provider
+      return result;
+    }
+    
+    throw error;
+  }
+};
+
+/**
  * Generate embeddings using hash-based similarity
  * (No real embeddings to keep it simple)
  */
@@ -154,6 +254,7 @@ initClients();
 
 module.exports = {
   describeImage,
+  describeScene,
   generateEmbedding,
   cosineSimilarity,
   getCurrentProvider,

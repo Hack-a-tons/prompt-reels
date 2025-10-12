@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const config = require('../config');
 const { processVideo } = require('../core/videoProcessor');
-const { describeImage } = require('../core/gemini');
+const { describeImage, describeScene } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
@@ -162,7 +162,7 @@ router.post('/analyze', async (req, res) => {
  */
 router.post('/detect-scenes', async (req, res) => {
   try {
-    const { videoId, threshold = 0.4, extractFrames = false } = req.body;
+    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false } = req.body;
     
     if (!videoId) {
       return res.status(400).json({ error: 'videoId is required' });
@@ -186,6 +186,41 @@ router.post('/detect-scenes', async (req, res) => {
     if (extractFrames) {
       const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
       scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+      
+      // Optionally describe scenes based on frames
+      if (describeScenes) {
+        console.log(`\n📝 Generating scene descriptions...`);
+        
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
+          
+          if (scene.frames && scene.frames.length > 0) {
+            try {
+              console.log(`  Describing scene ${scene.sceneId}...`);
+              
+              // Get absolute paths to frame files
+              const framePaths = scene.frames.map(frame => frame.path);
+              
+              // Generate description
+              const description = await describeScene(
+                framePaths,
+                scene.sceneId,
+                scene.start,
+                scene.end
+              );
+              
+              // Add description to scene
+              scene.description = description;
+              console.log(`  ✓ Scene ${scene.sceneId}: ${description.substring(0, 60)}...`);
+            } catch (error) {
+              console.error(`  ✗ Failed to describe scene ${scene.sceneId}:`, error.message);
+              scene.description = null;
+            }
+          }
+        }
+        
+        console.log(`✓ Scene descriptions complete\n`);
+      }
     }
 
     // Save scene data
@@ -573,7 +608,7 @@ router.get('/scenes/:videoId', (req, res) => {
   <div class="container">
     <div class="video-player">
       <h2>📹 Video Playback</h2>
-      <video id="videoPlayer" controls autoplay>
+      <video id="videoPlayer" controls autoplay muted>
         <source src="/${videoPath}" type="video/mp4">
         Your browser does not support the video tag.
       </video>
