@@ -42,7 +42,10 @@ app.use('/api', routes);
 // Dashboard HTML page
 app.get('/', (req, res) => {
   const { listArticles } = require('./core/articleWorkflow');
-  const articles = listArticles();
+  const allArticles = listArticles();
+  
+  // Filter to only show articles with local videos
+  const articles = allArticles.filter(article => article.hasLocalVideo);
   
   const html = `
 <!DOCTYPE html>
