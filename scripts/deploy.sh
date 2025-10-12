@@ -214,7 +214,7 @@ HEALTH_CHECK=$(curl -s https://api.reels.hurated.com/health 2>&1)
 
 if [ $? -eq 0 ]; then
     STATUS=$(echo "$HEALTH_CHECK" | jq -r '.status' 2>/dev/null)
-    if [ "$STATUS" = "ok" ]; then
+    if [ "$STATUS" = "ok" ] || [ "$STATUS" = "healthy" ]; then
         echo -e "${GREEN}✓ API is healthy!${NC}"
         echo ""
         echo -e "${GREEN}✓ Deployment complete!${NC}"
