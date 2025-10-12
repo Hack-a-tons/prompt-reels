@@ -153,6 +153,28 @@ npm run reset-prompts     # Reset prompts.json to clean template
 - `uploads/*` - All uploaded videos
 - `data/prompts.json` - Reset to original (unless `-k`)
 
+### Upload & List Videos
+```bash
+# Upload a video
+./scripts/upload.sh video.mp4          # Upload to prod
+./scripts/upload.sh video.mp4 dev      # Upload to dev
+
+# List uploaded videos (with VIDEO_IDs)
+./scripts/list.sh                      # List prod videos
+./scripts/list.sh dev                  # List dev videos
+./scripts/list.sh -f                   # Show full filenames
+```
+
+**Upload returns:**
+- `VIDEO_ID` - Use this with detect-scenes.sh, analyze, etc.
+- Latest VIDEO_ID saved to `/tmp/prompt-reels-latest-video-id`
+- Shows example commands with the VIDEO_ID
+
+**List shows:**
+- All uploaded videos with their VIDEO_IDs
+- File sizes and upload dates
+- Example usage commands
+
 ### Production Deployment
 ```bash
 # Quick deploy with commit
@@ -248,10 +270,14 @@ Response: {
   outputPath 
 }
 
-# Use the script
+# Use the script (VIDEO_ID from upload.sh or list.sh)
 ./scripts/detect-scenes.sh video-1234567890           # Basic
 ./scripts/detect-scenes.sh -f video-1234567890        # With frames
 ./scripts/detect-scenes.sh -t 0.3 video-1234567890    # Custom threshold
+
+# Complete workflow
+./scripts/upload.sh video.mp4                         # Returns VIDEO_ID
+./scripts/detect-scenes.sh -f <VIDEO_ID>              # Detect & extract frames
 ```
 
 **How it works:**
