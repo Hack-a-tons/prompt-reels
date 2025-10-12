@@ -262,11 +262,11 @@ app.get('/', (req, res) => {
             </thead>
             <tbody>
                 ${articles.map(article => {
-                    // Get video player for preview
+                    // Get video player for preview (use thumbnail for dashboard)
                     let videoHtml = '<div class="no-video">No video</div>';
                     if (article.hasLocalVideo) {
-                        const videoPath = `/api/articles/${article.articleId}.mp4`;
-                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${videoPath}" type="video/mp4"></video>`;
+                        const thumbnailPath = `/api/thumbnails/${article.articleId}.mp4`;
+                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${thumbnailPath}" type="video/mp4"></video>`;
                     }
                     
                     // Score coloring: high (>70) = green, medium (40-70) = yellow, low (<40) = red

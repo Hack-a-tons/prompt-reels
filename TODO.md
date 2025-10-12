@@ -53,6 +53,7 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] `status.sh` - Monitor queues, flags, and processing status
 - [x] `evolve.sh` - **ENHANCED:** Run FPO with flexible syntax (10, -n 10, -n10), random article selection
 - [x] `fpo-history.sh` - View FPO optimization history with prompt templates
+- [x] `generate-thumbnails.sh` - **NEW:** Create lightweight video thumbnails for dashboard
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
 - [x] `cleanup.sh` - Clean with targets (all/articles/output/uploads/prompts)
 - [x] `show-prompts.sh` - Display prompt templates
@@ -103,11 +104,13 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Flag system** - Prevents duplicate operations (/tmp/prompt-reels-flags/)
 
 ### Video Optimization
-- [x] **Range request support** - HTTP 206 Partial Content
-- [x] **Fast video loading** - preload="metadata" strategy
-- [x] **Video streaming endpoint** - /api/articles/:articleId.mp4
+- [x] **Range request support** - Fast video seeking
 - [x] **Local video playback** - All pages use downloaded videos
 - [x] **Whisper rate limiting** - 3 req/min, proactive waiting
+- [x] **Video thumbnails** - Lightweight previews for dashboard (1-2 MB vs 50-400 MB)
+- [x] **Auto-thumbnail generation** - Created automatically on video download
+- [x] **Thumbnail fallback** - Uses full video if thumbnail doesn't exist
+- [x] **generate-thumbnails.sh** - Script to create thumbnails for existing videos
 
 ### FPO Improvements
 - [x] **Automatic FPO on rating** - Runs when articles rated

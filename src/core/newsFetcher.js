@@ -468,6 +468,10 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
             try {
               videoPath = await downloadVideo(videoData.url, articleId);
               log.info(`Video downloaded: ${videoPath}`);
+              
+              // Generate thumbnail after video download
+              const { generateThumbnail } = require('../utils/thumbnailGenerator');
+              await generateThumbnail(articleId);
             } catch (error) {
               log.warn(`Could not download video: ${error.message}`);
             }

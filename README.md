@@ -1130,11 +1130,24 @@ Run multiple FPO iterations easily:
 
 ## 📊 Video Optimization & Performance
 
+### Video Thumbnails
+Dashboard uses lightweight thumbnails for fast loading:
+- **Thumbnails:** 5-second previews at 480p (~1-2 MB each)
+- **Full videos:** Used for article pages and processing
+- **Auto-generated:** Created automatically when fetching news
+- **Fallback:** Uses full video if thumbnail doesn't exist
+
+**Generate thumbnails for existing videos:**
+```bash
+./scripts/generate-thumbnails.sh
+```
+
 ### Range Request Support
 All video endpoints support HTTP range requests for instant playback:
 
 ```bash
-GET /api/articles/:articleId.mp4
+GET /api/thumbnails/:articleId.mp4  # Dashboard preview (1-2 MB)
+GET /api/articles/:articleId.mp4    # Full video (streaming)
 # Supports: Range: bytes=0-1048575
 # Returns: 206 Partial Content
 ```
