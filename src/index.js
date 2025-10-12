@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const path = require('path');
 const config = require('./config');
 const routes = require('./api/routes');
 const { initWeave } = require('./core/weave');
@@ -9,6 +10,10 @@ const app = express();
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files (videos and extracted frames)
+app.use('/uploads', express.static(path.join(__dirname, '..', config.uploadDir)));
+app.use('/output', express.static(path.join(__dirname, '..', config.outputDir)));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
