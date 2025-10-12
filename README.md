@@ -200,12 +200,39 @@ POST /api/fpo/run
 }
 # Note: Uses extracted frames from previous video analysis for testing
 # If no frames available, runs without image evaluation
+# Each iteration tests 5 prompts × 3 domains = 15 evaluations
 
 GET /api/fpo/status
 # Returns current prompt weights and performance history
 
 GET /api/fpo/dashboard
 # Returns rankings with statistics (avg, min, max, trend)
+```
+
+**What you'll see during FPO:**
+```
+============================================================
+🎯 FPO Iteration 1
+============================================================
+
+🔄 Starting evaluation: 15 total API requests
+   Domains: 3, Prompts: 5
+
+[1/15] (6.7%) Evaluating: baseline @ news
+   ✓ Score: 0.0234, Latency: 1841ms
+
+[2/15] (13.3%) Evaluating: structured @ news
+   ✓ Score: 0.0567, Latency: 1698ms
+...
+
+────────────────────────────────────────────────────────────
+📊 Iteration 1 Complete
+   Global prompt: baseline
+   Prompt weights:
+      baseline             weight: 0.0333
+      technical            weight: 0.0125
+      comprehensive        weight: 0.0107
+────────────────────────────────────────────────────────────
 ```
 
 ### View Best Prompts
@@ -251,6 +278,31 @@ AI_PROVIDER=gemini   # Use Google Gemini
 - Scores are computed via cosine similarity of embeddings vs ground truth.
 - Aggregator merges top prompts → new global prompt distributed to nodes.
 - **Weave** logs every prompt version and score.
+
+## 📊 Weights & Biases Integration
+
+The system uses **Weave** (W&B's LLM experiment tracker) to log all experiments:
+
+**Setup:**
+```bash
+# Set your W&B API key in .env
+WANDB_API_KEY=your_wandb_api_key_here
+WANDB_PROJECT=prompt-reels
+```
+
+**What gets logged:**
+- Prompt evaluations (score, latency, domain, description)
+- FPO iterations (global prompt, weights, performance)
+- Video analyses (duration, frames, metadata)
+
+**View your experiments:**
+- **Cloud dashboard**: https://wandb.ai/your-username/prompt-reels
+- **Local logs**: `output/weave-logs/weave-*.jsonl` (fallback if W&B unavailable)
+
+**How it works:**
+- System tries to connect to W&B cloud first
+- Falls back to file-based logging if W&B unavailable
+- All logging is non-blocking (won't break if W&B fails)
 
 ---
 
