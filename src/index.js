@@ -263,7 +263,7 @@ app.get('/', (req, res) => {
                     let videoHtml = '<div class="no-video">No video</div>';
                     if (article.hasLocalVideo) {
                         const videoPath = `/api/articles/${article.articleId}.mp4`;
-                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline preload="metadata"><source src="${videoPath}" type="video/mp4"></video>`;
+                        videoHtml = `<video class="video-preview" muted loop playsinline preload="metadata" onloadedmetadata="this.play().catch(e=>console.log('Autoplay blocked'))"><source src="${videoPath}" type="video/mp4"></video>`;
                     }
                     
                     // Score coloring: high (>70) = green, medium (40-70) = yellow, low (<40) = red
@@ -672,12 +672,19 @@ app.get('/articles/:articleId', (req, res) => {
         
         ${hasLocalVideo ? `
         <div class="video-container">
-            <video controls autoplay muted playsinline preload="metadata">
+            <video controls muted playsinline preload="metadata" id="mainVideo">
                 <source src="${videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </div>
         <a href="${videoUrl}" class="video-link" target="_blank">🔗 Direct video link: ${videoUrl}</a>
+        <script>
+            // Try to autoplay, but don't fail if blocked
+            const video = document.getElementById('mainVideo');
+            video.play().catch(err => {
+                console.log('Autoplay blocked, user interaction required:', err.message);
+            });
+        </script>
         ` : `
         <div class="no-video">
             <h2>📹 Video Not Downloaded</h2>
