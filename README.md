@@ -115,10 +115,11 @@ npm start                # Start without auto-reload
 
 ### Test the API
 ```bash
-./test.sh health          # Test health endpoint
+./test.sh health          # Test dev server (localhost)
+./test.sh health prod     # Test production server
 ./test.sh -v health       # Verbose mode (shows curl & JSON)
 ./test.sh -p5 health      # Pause 5s after test
-./test.sh all -pv         # Run all tests with pause & verbose
+./test.sh all prod -pv    # Run all tests on prod with pause & verbose
 ```
 
 ### Free Port (if needed)
@@ -201,23 +202,47 @@ POST /api/fpo/run
 # If no frames available, runs without image evaluation
 
 GET /api/fpo/status
-# Returns current prompt weights and performance
+# Returns current prompt weights and performance history
+
+GET /api/fpo/dashboard
+# Returns rankings with statistics (avg, min, max, trend)
+```
+
+### View Best Prompts
+```bash
+# Show top 10 prompts (default)
+./scripts/show-prompts.sh
+
+# Show top 5 prompts
+./scripts/show-prompts.sh -n 5
+
+# Show all prompts
+./scripts/show-prompts.sh -n 100
 ```
 
 ---
 
-## ⚠️ API Quota Limits
+## 🔧 AI Provider Configuration
 
-### Gemini Free Tier
-- **Per-minute**: 2 requests/minute (handled automatically with 30s delays)
-- **Per-day**: 50 requests/day total
-- **FPO impact**: 3 iterations × 5 prompts × 3 domains = 45 requests
-- **Quota tracking**: Shows `[X/50] requests today` in logs
+### Simple Provider Switch
 
-**If you hit daily quota:**
-1. Wait for reset (midnight Pacific Time)
-2. Use Azure OpenAI fallback (configure in `.env`)
-3. Reduce iterations: `{"iterations": 1}`
+Set your preferred AI provider in `.env`:
+
+```bash
+AI_PROVIDER=azure    # Use Azure OpenAI (default)
+# or
+AI_PROVIDER=gemini   # Use Google Gemini
+```
+
+**How it works:**
+- Uses selected provider for image descriptions
+- Auto-switches to fallback provider on failure
+- Embeddings use hash-based similarity (no external API needed)
+
+**Current configuration:**
+- **Azure OpenAI**: GPT-4.1 deployment (recommended)
+- **Google Gemini**: gemini-2.5-pro
+- **Embeddings**: Hash-based (no quota limits)
 
 ---
 

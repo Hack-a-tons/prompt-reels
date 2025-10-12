@@ -56,12 +56,46 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 
 ---
 
-## Stretch Goals
-- [ ] Real-time Weave visualization updates.
-- [ ] Deploy on Google Cloud Run.
-- [ ] Integrate multiple Gemini model variants (e.g., `gemini-2.5-pro`, `gemini-2.5-flash`). 
-- [ ] Add feedback scoring UI.
-- [ ] Post demo to X for "Viral on X" prize.
+## Next Steps - FPO Improvements
+
+### High Priority
+- [ ] **Scene-based frame extraction**
+  - Detect scene changes using ffmpeg
+  - Extract 3 frames per scene (beginning, middle, end)
+  - Analyze frames together for better context
+  - **Impact**: Significantly improves data quality and scoring accuracy
+
+- [ ] **Multiple test videos per domain**
+  - Create `data/test-videos/{news,sports,reels}` structure
+  - Add domain-specific test videos with proper reference texts
+  - Use all uploaded videos instead of just latest
+  - **Impact**: Better evaluation coverage across content types
+
+- [ ] **Dashboard endpoint**
+  - Create `/api/fpo/dashboard` with statistics
+  - Show: avg score, min/max, trends, evaluation count
+  - Add simple HTML visualization
+  - **Impact**: Easy to see current best prompt and trends
+
+### Medium Priority
+- [ ] **Real W&B Weave integration**
+  - Install `@wandb/weave` SDK
+  - Replace file-based logging with cloud API
+  - View experiments at https://wandb.ai
+  - **Impact**: Better visualization and collaboration
+
+- [ ] **Analysis script for local logs**
+  - Create `scripts/analyze-weave-logs.js`
+  - Group evaluations by prompt
+  - Show performance trends over time
+  - **Impact**: Understand current data without W&B cloud
+
+### Stretch Goals
+- [ ] Real-time Weave visualization updates
+- [ ] Deploy on Google Cloud Run
+- [ ] Integrate multiple Gemini model variants (e.g., `gemini-2.5-pro`, `gemini-2.5-flash`)
+- [ ] Add feedback scoring UI
+- [ ] Post demo to X for "Viral on X" prize
 
 ---
 
