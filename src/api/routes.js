@@ -741,8 +741,6 @@ router.post('/fetch-news', async (req, res) => {
   try {
     const { query = 'latest news video', maxResults = 5 } = req.body;
     
-    console.log(`\n📰 News fetch request: "${query}"`);
-    
     const articleData = await fetchNewsArticle(query, maxResults);
     
     res.json({
@@ -750,7 +748,6 @@ router.post('/fetch-news', async (req, res) => {
       article: articleData,
     });
   } catch (error) {
-    console.error('News fetch error:', error);
     res.status(500).json({ 
       error: error.message,
       details: 'Failed to fetch news article with video'

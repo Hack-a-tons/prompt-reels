@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const config = require('../config');
+const { log } = require('../utils/logger');
 
 /**
  * Fetch latest news articles using Tavily API
@@ -17,16 +18,22 @@ const fetchNewsWithTavily = async (query = 'latest news video', maxResults = 5) 
   try {
     const response = await axios.post('https://api.tavily.com/search', {
       api_key: config.tavilyApiKey,
-      query,
+      query: `${query} video`,
       max_results: maxResults,
       search_depth: 'advanced',
       include_images: true,
       include_answer: true,
+      include_raw_content: true,
+      topic: 'news',
     });
 
+    log.info(`Tavily API: Found ${response.data.results?.length || 0} results`);
     return response.data.results || [];
   } catch (error) {
-    console.error('Tavily API error:', error.message);
+    log.error(`Tavily API error: ${error.message}`);
+    if (error.response) {
+      log.error(`Tavily response: ${JSON.stringify(error.response.data)}`);
+    }
     throw error;
   }
 };
@@ -41,6 +48,9 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
     throw new Error('BROWSERBASE_API_KEY or BROWSERBASE_PROJECT_ID not configured');
   }
 
+  let browser = null;
+  let sessionId = null;
+  
   try {
     // Create a browser session
     const sessionResponse = await axios.post(
@@ -56,13 +66,14 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
       }
     );
 
-    const sessionId = sessionResponse.data.id;
+    sessionId = sessionResponse.data.id;
     const connectUrl = sessionResponse.data.connectUrl;
+    log.debug(`BrowserBase session created: ${sessionId}`);
 
     // Navigate to the page and extract video elements
     // Using Playwright-compatible commands via BrowserBase
     const { chromium } = require('playwright-core');
-    const browser = await chromium.connectOverCDP(connectUrl);
+    browser = await chromium.connectOverCDP(connectUrl);
     const context = browser.contexts()[0];
     const page = await context.newPage();
 
@@ -101,12 +112,20 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
       return videos.length > 0 ? videos[0] : null;
     });
 
-    await browser.close();
-
     return videoData;
   } catch (error) {
-    console.error('BrowserBase error:', error.message);
+    log.error(`BrowserBase error: ${error.message}`);
     return null;
+  } finally {
+    // Always close browser and end session
+    if (browser) {
+      try {
+        await browser.close();
+        log.debug(`BrowserBase session closed: ${sessionId}`);
+      } catch (closeError) {
+        log.warn(`Failed to close browser: ${closeError.message}`);
+      }
+    }
   }
 };
 
@@ -140,7 +159,7 @@ const downloadVideo = async (videoUrl, articleId) => {
       writer.on('error', reject);
     });
   } catch (error) {
-    console.error('Video download error:', error.message);
+    log.error(`Video download error: ${error.message}`);
     throw error;
   }
 };
@@ -152,41 +171,41 @@ const downloadVideo = async (videoUrl, articleId) => {
  * @returns {Promise<Object>} Article with video and metadata
  */
 const fetchNewsArticle = async (query = 'latest news video', maxResults = 5) => {
-  console.log(`\n📰 Fetching news articles for: "${query}"`);
+  log.info(`Fetching news articles for: "${query}"`);
   
   // Step 1: Fetch articles with Tavily
   const articles = await fetchNewsWithTavily(query, maxResults);
-  console.log(`✓ Found ${articles.length} articles`);
+  log.info(`Found ${articles.length} articles from Tavily`);
 
   if (articles.length === 0) {
-    throw new Error('No articles found');
+    throw new Error('No articles found from Tavily API');
   }
 
   // Step 2: Try to extract video from articles
   for (let i = 0; i < articles.length; i++) {
     const article = articles[i];
-    console.log(`\n📄 Checking article ${i + 1}/${articles.length}: ${article.title}`);
-    console.log(`   URL: ${article.url}`);
+    log.info(`Checking article ${i + 1}/${articles.length}: ${article.title.substring(0, 50)}...`);
+    log.debug(`URL: ${article.url}`);
 
     try {
       const videoData = await extractVideoWithBrowserBase(article.url);
       
       if (videoData && videoData.url) {
-        console.log(`✓ Found video: ${videoData.url}`);
+        log.info(`Found video: ${videoData.url.substring(0, 60)}...`);
         
         // Generate article ID
         const articleId = `article-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
         
         // Download video
-        console.log(`📥 Downloading video...`);
+        log.info('Downloading video...');
         let videoPath = null;
         
         if (videoData.type === 'video') {
           try {
             videoPath = await downloadVideo(videoData.url, articleId);
-            console.log(`✓ Video downloaded: ${videoPath}`);
+            log.info(`Video downloaded: ${videoPath}`);
           } catch (error) {
-            console.log(`✗ Could not download video: ${error.message}`);
+            log.warn(`Could not download video: ${error.message}`);
           }
         }
 
@@ -221,18 +240,18 @@ const fetchNewsArticle = async (query = 'latest news video', maxResults = 5) => 
         
         const metadataPath = path.join(articlesDir, `${articleId}.json`);
         fs.writeFileSync(metadataPath, JSON.stringify(articleData, null, 2));
-        console.log(`✓ Metadata saved: ${metadataPath}`);
+        log.info(`Metadata saved: ${metadataPath}`);
 
         return articleData;
       } else {
-        console.log(`✗ No video found in article`);
+        log.warn('No video found in article');
       }
     } catch (error) {
-      console.log(`✗ Error processing article: ${error.message}`);
+      log.error(`Error processing article: ${error.message}`);
     }
   }
 
-  throw new Error('No articles with downloadable videos found');
+  throw new Error('No articles with downloadable videos found after checking all results');
 };
 
 module.exports = {
