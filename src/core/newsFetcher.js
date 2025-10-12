@@ -78,7 +78,29 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
     const context = browser.contexts()[0];
     const page = await context.newPage();
 
-    await page.goto(articleUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    // Use 'load' instead of 'networkidle' - more reliable
+    // Increase timeout to 60s for slower sites
+    try {
+      await page.goto(articleUrl, { waitUntil: 'load', timeout: 60000 });
+    } catch (gotoError) {
+      // If goto times out, try to continue anyway - page might be partially loaded
+      log.warn(`Page load timeout/error (continuing anyway): ${gotoError.message}`);
+    }
+
+    // Wait a bit for dynamic content to load
+    await page.waitForTimeout(2000);
+    
+    // Scroll down to trigger lazy-loaded videos
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight / 2);
+    });
+    await page.waitForTimeout(1000);
+    
+    // Scroll back up
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await page.waitForTimeout(1000);
 
     // Extract video sources
     const videoData = await page.evaluate(() => {
@@ -101,11 +123,13 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
           }
         }
         
-        // Also check data attributes which often contain real URLs
+        // Check more data attributes which often contain real URLs
         if (!src || src.startsWith('blob:')) {
           const dataSrc = video.getAttribute('data-src') || 
                          video.getAttribute('data-video-src') ||
-                         video.getAttribute('data-url');
+                         video.getAttribute('data-url') ||
+                         video.getAttribute('data-video-url') ||
+                         video.getAttribute('data-lazy-src');
           if (dataSrc && !dataSrc.startsWith('blob:')) {
             src = dataSrc;
           }
@@ -123,14 +147,55 @@ const extractVideoWithBrowserBase = async (articleUrl) => {
 
       // Check for embedded videos (YouTube, Vimeo, etc.)
       document.querySelectorAll('iframe').forEach(iframe => {
-        const src = iframe.src;
-        if (src && (src.includes('youtube.com') || src.includes('vimeo.com') || src.includes('dailymotion.com'))) {
+        const src = iframe.src || iframe.getAttribute('data-src');
+        if (src && (src.includes('youtube.com') || src.includes('youtu.be') || 
+                   src.includes('vimeo.com') || src.includes('dailymotion.com'))) {
           videos.push({
             type: 'embed',
             url: src,
-            platform: src.includes('youtube.com') ? 'youtube' :
+            platform: (src.includes('youtube.com') || src.includes('youtu.be')) ? 'youtube' :
                      src.includes('vimeo.com') ? 'vimeo' :
                      src.includes('dailymotion.com') ? 'dailymotion' : 'unknown',
+          });
+        }
+      });
+      
+      // Check for JSON-LD structured data (often has video URLs)
+      document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
+        try {
+          const data = JSON.parse(script.textContent);
+          const findVideoUrl = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+            if (obj.contentUrl && typeof obj.contentUrl === 'string') return obj.contentUrl;
+            if (obj.videoUrl && typeof obj.videoUrl === 'string') return obj.videoUrl;
+            if (obj.embedUrl && typeof obj.embedUrl === 'string') return obj.embedUrl;
+            for (const key in obj) {
+              const result = findVideoUrl(obj[key]);
+              if (result) return result;
+            }
+            return null;
+          };
+          const videoUrl = findVideoUrl(data);
+          if (videoUrl && !videoUrl.startsWith('blob:')) {
+            videos.push({
+              type: 'video',
+              url: videoUrl,
+              poster: null,
+            });
+          }
+        } catch (e) {
+          // Invalid JSON, skip
+        }
+      });
+      
+      // Check meta tags for video URLs
+      document.querySelectorAll('meta[property*="video"], meta[name*="video"]').forEach(meta => {
+        const content = meta.getAttribute('content');
+        if (content && !content.startsWith('blob:') && (content.startsWith('http') || content.startsWith('//'))) {
+          videos.push({
+            type: 'video',
+            url: content,
+            poster: null,
           });
         }
       });
