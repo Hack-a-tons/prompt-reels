@@ -244,6 +244,24 @@ GET /api/fpo/dashboard
 ────────────────────────────────────────────────────────────
 ```
 
+### Manage Evolution
+```bash
+# Start evolution (5 iterations)
+./scripts/evolve.sh start prod
+
+# Start with custom parameters
+./scripts/evolve.sh start -n 7 -i 2 prod
+
+# Upload video and evolve
+./scripts/evolve.sh start -v sample.mp4 prod
+
+# Check evolution status
+./scripts/evolve.sh status prod
+
+# View detailed guide
+cat EVOLUTION_GUIDE.md
+```
+
 ### View Best Prompts
 ```bash
 # Show top 10 prompts (default)
