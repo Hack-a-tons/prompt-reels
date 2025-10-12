@@ -270,6 +270,21 @@ app.get('/articles/:articleId', (req, res) => {
   
   const hasLocalVideo = !!article.video.localPath;
   
+  // Simple text formatter (handles newlines and basic formatting)
+  const formatText = (text) => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/^(.+)$/, '<p>$1</p>');
+  };
+  
   const html = `
 <!DOCTYPE html>
 <html lang="en">
@@ -354,7 +369,34 @@ app.get('/articles/:articleId', (req, res) => {
         }
         .description {
             color: #e7e9ea;
-            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+        .description p {
+            margin-bottom: 15px;
+        }
+        .description ul, .description ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        .description li {
+            margin-bottom: 8px;
+        }
+        .description code {
+            background: #1c1f23;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+        .description strong {
+            color: #1d9bf0;
+            font-weight: 600;
+        }
+        .description a {
+            color: #1d9bf0;
+            text-decoration: none;
+        }
+        .description a:hover {
+            text-decoration: underline;
         }
         .info-grid {
             display: grid;
@@ -424,7 +466,7 @@ app.get('/articles/:articleId', (req, res) => {
         
         ${hasLocalVideo ? `
         <div class="video-container">
-            <video controls autoplay>
+            <video controls autoplay muted playsinline>
                 <source src="${videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
@@ -464,14 +506,14 @@ app.get('/articles/:articleId', (req, res) => {
         ${article.description ? `
         <div class="content-section">
             <h2>Description</h2>
-            <div class="description">${article.description}</div>
+            <div class="description">${formatText(article.description)}</div>
         </div>
         ` : ''}
         
         ${article.text && article.text !== article.description ? `
         <div class="content-section">
             <h2>Full Article Text</h2>
-            <div class="description">${article.text.substring(0, 2000)}${article.text.length > 2000 ? '...' : ''}</div>
+            <div class="description">${formatText(article.text.substring(0, 2000))}${article.text.length > 2000 ? '...' : ''}</div>
         </div>
         ` : ''}
         
