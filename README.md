@@ -193,6 +193,35 @@ Response: Analysis results JSON
 ```
 
 ### FPO (Federated Prompt Optimization) with Evolution 🧬
+
+Complete guide to the self-improving prompt system.
+
+#### Quick Start
+```bash
+# Start evolution (5 iterations on prod)
+./evolve.sh start
+
+# Check evolution status
+./evolve.sh status
+
+# View all prompts
+./scripts/show-prompts.sh
+```
+
+#### 📍 Where Evolved Prompts Are Stored
+
+**Location:** `data/prompts.json`
+
+**Key Fields:**
+- **`generation`**: 0 = original, 1+ = evolved
+- **`parents`**: IDs of parent prompts used in crossover
+- **`weight`**: Current performance score (higher = better)
+- **`performance`**: History of scores from all iterations
+- **`created`**: When the evolved prompt was created
+
+#### 🔧 API Endpoints
+
+**Start Evolution:**
 ```bash
 POST /api/fpo/run
 {
@@ -200,77 +229,158 @@ POST /api/fpo/run
   "enableEvolution": true,   // Enable genetic crossover (default: true)
   "evolutionInterval": 2     // Evolve every N iterations (default: 2)
 }
-# Note: Uses extracted frames from previous video analysis for testing
-# If no frames available, runs without image evaluation
-# Evolution creates new prompts by combining top 2 performers
 
-GET /api/fpo/status
-# Returns current prompt weights, performance history, and generations
-
-GET /api/fpo/dashboard
-# Returns rankings with statistics (avg, min, max, trend)
+# Example
+curl -X POST https://api.reels.hurated.com/api/fpo/run \
+  -H "Content-Type: application/json" \
+  -d '{"iterations": 7, "enableEvolution": true}'
 ```
 
-**Genetic Crossover:**
-- After every 2 iterations (configurable), the top 2 prompts "breed"
-- Uses Azure GPT to intelligently combine their best features
-- Creates a new "child" prompt that inherits strengths from both parents
-- Population evolves over time: Gen 0 (original) → Gen 1 → Gen 2 → ...
-- Worst performers are removed to keep population manageable (max 10 prompts)
-
-**What you'll see during FPO:**
-```
-============================================================
-🎯 FPO Iteration 1
-============================================================
-
-🔄 Starting evaluation: 15 total API requests
-   Domains: 3, Prompts: 5
-
-[1/15] (6.7%) Evaluating: baseline @ news
-   ✓ Score: 0.0234, Latency: 1841ms
-
-[2/15] (13.3%) Evaluating: structured @ news
-   ✓ Score: 0.0567, Latency: 1698ms
-...
-
-────────────────────────────────────────────────────────────
-📊 Iteration 1 Complete
-   Global prompt: baseline
-   Prompt weights:
-      baseline             weight: 0.0333
-      technical            weight: 0.0125
-      comprehensive        weight: 0.0107
-────────────────────────────────────────────────────────────
-```
-
-### Manage Evolution
+**Get Status:**
 ```bash
-# Start evolution (5 iterations on prod)
+GET /api/fpo/status
+# Returns: globalPrompt, populationSize, maxGeneration, templates with weights
+
+curl https://api.reels.hurated.com/api/fpo/status | jq .
+```
+
+#### 🧬 Genetic Crossover
+
+**How it works:**
+- Every 2 iterations (configurable), the top 2 prompts "breed"
+- Azure GPT intelligently combines their best features
+- Creates a new "child" prompt that inherits strengths from both parents
+- Population evolves: Gen 0 (original) → Gen 1 → Gen 2 → ...
+- Worst performers removed (max 10 prompts)
+
+**Evolution Timeline Example:**
+```
+Iteration 1: Test 5 original prompts
+Iteration 2: Test + 🧬 Create Gen 1 (breed top 2)
+Iteration 3: Test 6 prompts (5 original + 1 evolved)
+Iteration 4: Test + 🧬 Create Gen 2
+Iteration 5: Test 7 prompts
+...
+```
+
+#### 🎯 Using evolve.sh
+
+**Commands:**
+```bash
+# Start evolution (basic)
 ./evolve.sh start
 
-# Start with custom parameters
+# Custom iterations (7 rounds, evolve every 2)
 ./evolve.sh start -n 7 -i 2
 
-# Upload video and evolve
+# Upload video first, then evolve
 ./evolve.sh start -v sample.mp4
 
 # Run on dev server
 ./evolve.sh start dev
 
-# Check evolution status
+# Check evolution status (shows top 5 with prompts)
 ./evolve.sh status
 
-# View detailed guide
-cat EVOLUTION_GUIDE.md
+# View help
+./evolve.sh --help
 ```
 
-### View Best Prompts
+**Example Output:**
+```
+=== Prompt Evolution Status (prod) ===
+
+Current Best: structured
+Population Size: 6 prompts
+Max Generation: 1
+
+Composition:
+  Original prompts: 5
+  Evolved prompts: 1
+
+Top 5 Prompts:
+
+1. Structured Analysis (structured)
+   Weight: 0.0230
+   Prompt: "Analyze this video frame and provide: 
+           1) Main subjects, 2) Actions occurring..."
+
+2. Evolved Gen 1 (evolved_gen1_xyz)
+   Weight: 0.0215
+   Generation: 1
+   Parents: baseline, technical
+   Prompt: "Describe in detail what you see..."
+```
+
+#### 🧪 Testing Scenarios
+
+**Quick Test (3 iterations):**
+```bash
+./evolve.sh start -n 3
+# Fast (~6 min), creates 1 evolved prompt
+```
+
+**Standard Evolution (5 iterations):**
+```bash
+./evolve.sh start -n 5
+# Balanced (~10 min), creates 2 generations
+```
+
+**Deep Evolution (10 iterations):**
+```bash
+./evolve.sh start -n 10 -i 2
+# Thorough (~20 min), creates 5 generations
+```
+
+#### 📈 Success Metrics
+
+**What to look for:**
+1. **Evolved prompts outperforming originals** - Gen 1+ with higher weights
+2. **Population growth** - More prompts over time (up to 10 max)
+3. **Increasing weights** - Later generations perform better
+
+**Example success:**
+```
+Gen 0 best: 0.033 (baseline)
+Gen 1 best: 0.041 (evolved from baseline × technical)
+Gen 2 best: 0.045 (evolved from Gen 1 × structured) ← Improving!
+```
+
+#### 🔍 Debugging
+
+**Check if evolution is running:**
+```bash
+ssh reels.hurated.com "docker compose -f prompt-reels/compose.yml logs -f"
+```
+
+Look for: `🧬 EVOLUTION PHASE`, `✓ Created: Evolved Gen N`
+
+**View evolved prompts:**
+```bash
+cat data/prompts.json | jq '.templates[] | select(.generation > 0)'
+```
+
+**Common issues:**
+- No evolved prompts: Check `enableEvolution: true` in request
+- All negative weights: Normal! Keep running more iterations
+- Timeout errors: Reduce iterations or increase timeout
+
+#### 🎓 Pro Tips
+
+1. Run 7-10 iterations to see real evolution
+2. Check W&B dashboard for visualizations
+3. Use multiple test videos for better evaluation
+4. Evolution interval of 2-3 works best
+5. Monitor population diversity - keep original prompts
+6. Patience! Evolution takes time to show results
+
+#### 📊 View Best Prompts
+
 ```bash
 # Show top 10 prompts (prod)
 ./scripts/show-prompts.sh
 
-# Show top 5 prompts on dev
+# Show top 5 on dev
 ./scripts/show-prompts.sh -n 5 dev
 
 # Show all prompts
