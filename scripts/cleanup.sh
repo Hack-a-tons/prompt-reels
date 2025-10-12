@@ -39,10 +39,10 @@ show_help() {
     echo "  ./scripts/cleanup.sh prompts            # Reset prompts only"
     echo ""
     echo "What's in each target:"
-    echo "  ${GRAY}articles:${NC}  output/articles/, uploads/articles/"
-    echo "  ${GRAY}output:${NC}    output/* (except articles/)"
-    echo "  ${GRAY}uploads:${NC}   uploads/* (except articles/)"
-    echo "  ${GRAY}prompts:${NC}   data/prompts.json → reset to defaults"
+    echo -e "  ${GRAY}articles:${NC}  output/articles/, uploads/articles/"
+    echo -e "  ${GRAY}output:${NC}    output/* (except articles/)"
+    echo -e "  ${GRAY}uploads:${NC}   uploads/* (except articles/)"
+    echo -e "  ${GRAY}prompts:${NC}   data/prompts.json → reset to defaults"
     echo ""
 }
 
