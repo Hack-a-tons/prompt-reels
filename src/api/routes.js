@@ -9,6 +9,12 @@ const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
 const { fetchNewsArticle } = require('../core/newsFetcher');
+const {
+  listArticles,
+  getArticleDetails,
+  linkArticleToScenes,
+  rateArticleMatch,
+} = require('../core/articleWorkflow');
 
 const router = express.Router();
 
@@ -794,19 +800,163 @@ router.get('/articles', (req, res) => {
 
 /**
  * GET /api/articles/:articleId
- * Get specific article data
+ * Get specific article data with full details
  */
 router.get('/articles/:articleId', (req, res) => {
   try {
     const { articleId } = req.params;
-    const articlePath = path.join(config.outputDir, 'articles', `${articleId}.json`);
+    const articleDetails = getArticleDetails(articleId);
     
-    if (!fs.existsSync(articlePath)) {
+    if (!articleDetails) {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    const articleData = JSON.parse(fs.readFileSync(articlePath, 'utf8'));
-    res.json(articleData);
+    res.json(articleDetails);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard
+ * Get dashboard data (all articles with status)
+ */
+router.get('/dashboard', (req, res) => {
+  try {
+    const articles = listArticles();
+    res.json({ articles, count: articles.length });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/articles/:articleId/describe
+ * Describe article video (detect and describe scenes)
+ */
+router.post('/articles/:articleId/describe', async (req, res) => {
+  try {
+    const { articleId } = req.params;
+    const articleDetails = getArticleDetails(articleId);
+    
+    if (!articleDetails) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+    
+    if (!articleDetails.video.localPath) {
+      return res.status(400).json({ error: 'Article has no local video to analyze' });
+    }
+    
+    const videoPath = articleDetails.video.localPath;
+    const fullVideoPath = path.join(process.cwd(), videoPath);
+    
+    if (!fs.existsSync(fullVideoPath)) {
+      return res.status(404).json({ error: 'Video file not found' });
+    }
+    
+    // Detect scenes
+    const threshold = req.body.threshold || 0.3;
+    const scenes = await detectScenes(fullVideoPath, threshold);
+    
+    // Extract frames and describe scenes
+    const scenesDir = path.join(config.outputDir, `${articleId}_frames`);
+    const scenesWithFrames = await extractSceneFrames(fullVideoPath, scenes, scenesDir);
+    
+    // Describe each scene
+    for (let scene of scenesWithFrames) {
+      if (scene.frames && scene.frames.length > 0) {
+        const framePaths = scene.frames.map(f => f.path);
+        const description = await describeScene(framePaths);
+        scene.description = description;
+      }
+    }
+    
+    // Save scene data
+    const sceneData = {
+      articleId,
+      videoId: articleId,  // Use same ID for now
+      sceneCount: scenes.length,
+      threshold,
+      detectedAt: new Date().toISOString(),
+      scenes: scenesWithFrames,
+    };
+    
+    const scenesPath = path.join(config.outputDir, `${articleId}_scenes.json`);
+    fs.writeFileSync(scenesPath, JSON.stringify(sceneData, null, 2));
+    
+    // Update article status
+    linkArticleToScenes(articleId, articleId, scenes.length);
+    
+    res.json({
+      success: true,
+      articleId,
+      sceneCount: scenes.length,
+      outputPath: scenesPath,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/articles/:articleId/rate
+ * Rate how well the video matches the article
+ */
+router.post('/articles/:articleId/rate', async (req, res) => {
+  try {
+    const { articleId } = req.params;
+    const articleDetails = getArticleDetails(articleId);
+    
+    if (!articleDetails) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
+    
+    if (!articleDetails.sceneData) {
+      return res.status(400).json({ error: 'Article has no scene descriptions yet. Run describe first.' });
+    }
+    
+    // Rate video-article match
+    // For now, use a simple prompt-based rating
+    const articleText = articleDetails.text || articleDetails.description;
+    const sceneDescriptions = articleDetails.sceneData.scenes
+      .map(s => s.description)
+      .filter(d => d)
+      .join('\n\n');
+    
+    const ratingPrompt = `Rate how well this video matches the article on a scale of 0-100.
+
+Article Title: ${articleDetails.title}
+
+Article Text:
+${articleText.substring(0, 1000)}${articleText.length > 1000 ? '...' : ''}
+
+Video Scene Descriptions:
+${sceneDescriptions.substring(0, 1000)}${sceneDescriptions.length > 1000 ? '...' : ''}
+
+Provide a rating (0-100) and brief explanation of how well the video illustrates the article content.
+Format: RATING: [number]\nEXPLANATION: [text]`;
+    
+    const { describeImage } = require('../core/gemini');
+    
+    // Use AI to rate (we can improve this later)
+    const rating = await describeImage(articleDetails.sceneData.scenes[0]?.frames[0]?.path || '', ratingPrompt);
+    
+    // Parse rating from response
+    const ratingMatch = rating.match(/RATING:\s*(\d+)/i);
+    const matchScore = ratingMatch ? parseInt(ratingMatch[1]) : 50;
+    
+    // Update article with rating
+    rateArticleMatch(articleId, matchScore, {
+      rating,
+      ratedAt: new Date().toISOString(),
+    });
+    
+    res.json({
+      success: true,
+      articleId,
+      matchScore,
+      rating,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

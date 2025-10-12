@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('../config');
 const { log } = require('../utils/logger');
+const { ArticleStatus } = require('./articleWorkflow');
 
 /**
  * Fetch latest news articles using Tavily API
@@ -264,6 +265,14 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
             published: article.published_date || null,
             fetchedAt: new Date().toISOString(),
             images: article.images || [],
+            workflow: {
+              status: ArticleStatus.FETCHED,
+              updatedAt: new Date().toISOString(),
+            },
+            statusHistory: [{
+              status: ArticleStatus.FETCHED,
+              timestamp: new Date().toISOString(),
+            }],
           };
 
           // Save article metadata

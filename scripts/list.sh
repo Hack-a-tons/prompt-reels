@@ -108,8 +108,11 @@ if [ "$TARGET" = "articles" ]; then
         article_id=$(echo "$article" | jq -r '.articleId')
         title=$(echo "$article" | jq -r '.title')
         source=$(echo "$article" | jq -r '.source')
+        status=$(echo "$article" | jq -r '.status')
         video_type=$(echo "$article" | jq -r '.videoType')
         has_local=$(echo "$article" | jq -r '.hasLocalVideo')
+        scene_count=$(echo "$article" | jq -r '.sceneCount')
+        match_score=$(echo "$article" | jq -r '.matchScore')
         fetched=$(echo "$article" | jq -r '.fetchedAt')
         
         # Truncate title if not showing full
@@ -118,21 +121,52 @@ if [ "$TARGET" = "articles" ]; then
             display_title="${title:0:57}..."
         fi
         
+        # Color code status
+        case $status in
+            fetched) status_color=$BLUE ;;
+            described) status_color=$YELLOW ;;
+            rated) status_color=$GREEN ;;
+            error) status_color=$RED ;;
+            *) status_color=$NC ;;
+        esac
+        
         echo -e "${GREEN}$article_id${NC}"
         echo -e "   Title: $display_title"
         echo -e "   Source: $source"
+        echo -e "   Status: ${status_color}$status${NC}"
         echo -e "   Video: $video_type"
         
         if [ "$has_local" = "true" ]; then
             echo -e "   ${GREEN}✓ Video downloaded${NC}"
-            echo -e "   ${GRAY}# Detect scenes:${NC}"
-            echo -e "   ${GRAY}./scripts/detect-scenes.sh $article_id${NC}"
         else
             echo -e "   ${YELLOW}○ Embedded video (not downloaded)${NC}"
         fi
         
+        if [ "$scene_count" != "0" ] && [ "$scene_count" != "null" ]; then
+            echo -e "   Scenes: $scene_count"
+        fi
+        
+        if [ "$match_score" != "null" ] && [ -n "$match_score" ]; then
+            echo -e "   Match Score: ${GREEN}$match_score/100${NC}"
+        fi
+        
         echo -e "   Fetched: $fetched"
         echo ""
+        
+        # Show next steps based on status
+        if [ "$status" = "fetched" ] && [ "$has_local" = "true" ]; then
+            echo -e "   ${GRAY}# Next: Describe scenes${NC}"
+            echo -e "   ${GRAY}./scripts/describe-article.sh $article_id${NC}"
+            echo ""
+        elif [ "$status" = "described" ]; then
+            echo -e "   ${GRAY}# View scenes: $BASE_URL/api/scenes/$article_id${NC}"
+            echo -e "   ${GRAY}# Next: Rate match${NC}"
+            echo -e "   ${GRAY}./scripts/rate-article.sh $article_id${NC}"
+            echo ""
+        elif [ "$status" = "rated" ]; then
+            echo -e "   ${GRAY}# View scenes: $BASE_URL/api/scenes/$article_id${NC}"
+            echo ""
+        fi
     done
     
     exit 0
