@@ -270,27 +270,37 @@ Response: {
   outputPath 
 }
 
-# Use the script (VIDEO_ID from upload.sh or list.sh)
-./scripts/detect-scenes.sh video-1234567890           # Basic (timestamps only)
-./scripts/detect-scenes.sh -f video-1234567890        # With frames + AI descriptions
+# Two-step workflow
+
+# Step 1: Detect scene timestamps (fast)
+./scripts/detect-scenes.sh video-1234567890           # Timestamps only
 ./scripts/detect-scenes.sh -t 0.3 video-1234567890    # Custom threshold
 
+# Step 2: Extract frames + generate AI descriptions (slower)
+./scripts/describe-scenes.sh video-1234567890         # Frames + descriptions
+
 # Complete workflow
-./scripts/upload.sh video.mp4                         # Returns VIDEO_ID
-./scripts/detect-scenes.sh -f <VIDEO_ID>              # Detect, extract frames, describe scenes
+./scripts/upload.sh video.mp4                         # 1. Upload → get VIDEO_ID
+./scripts/detect-scenes.sh <VIDEO_ID>                 # 2. Detect scenes (fast)
+./scripts/describe-scenes.sh <VIDEO_ID>               # 3. Extract + describe (AI)
 ```
 
 **How it works:**
-- Uses ffmpeg's scene detection filter (no file splitting needed!)
-- Analyzes frame differences to detect cuts and transitions
+
+**detect-scenes.sh** (Fast - timestamps only):
+- Uses ffmpeg's scene detection filter (no file splitting!)
+- Analyzes frame differences to detect cuts/transitions
 - Lower threshold (0.2-0.3): More sensitive, detects subtle changes
 - Higher threshold (0.5-0.6): Less sensitive, only major scene changes
 - Default (0.4): Good balance for most videos
-- **With `-f` flag:**
-  - Extracts 3 frames per scene (beginning/middle/end)
-  - **Generates AI descriptions** based on the 3 frames
-  - Uses Azure OpenAI or Gemini to analyze scene content
-  - Descriptions saved in JSON and displayed in viewer
+- **Output:** JSON with scene timestamps (start, end, duration)
+
+**describe-scenes.sh** (Slower - frames + AI):
+- Extracts 3 frames per scene (beginning/middle/end)
+- **Generates AI descriptions** based on the 3 frames
+- Uses Azure OpenAI or Gemini to analyze scene content
+- Descriptions saved in JSON and displayed in viewer
+- Can specify threshold (re-detects scenes if needed)
 
 ### View Detected Scenes 🎥
 

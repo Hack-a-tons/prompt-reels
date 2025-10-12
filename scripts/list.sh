@@ -143,8 +143,9 @@ echo "$FILES" | while read -r line; do
     # Show usage commands
     if [ $counter -eq 1 ]; then
         echo ""
-        echo -e "   ${GRAY}# Detect scenes:${NC}"
-        echo -e "   ${GRAY}./scripts/detect-scenes.sh -f $video_id${NC}"
+        echo -e "   ${GRAY}# Detect & describe scenes:${NC}"
+        echo -e "   ${GRAY}./scripts/detect-scenes.sh $video_id${NC}"
+        echo -e "   ${GRAY}./scripts/describe-scenes.sh $video_id${NC}"
     fi
     
     echo ""
