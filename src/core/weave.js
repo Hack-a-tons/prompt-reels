@@ -8,6 +8,13 @@ let wandbRun = null;
 let logFile = null;
 let useCloudWeave = false;
 
+// Simple logger for startup (before full logger is available)
+const simpleLog = {
+  info: (msg) => console.log(`✓  ${new Date().toISOString().replace('T', ' ').substring(0, 19)} ${msg}`),
+  warn: (msg) => console.warn(`⚠️  ${new Date().toISOString().replace('T', ' ').substring(0, 19)} ${msg}`),
+  error: (msg) => console.error(`❌ ${new Date().toISOString().replace('T', ' ').substring(0, 19)} ${msg}`),
+};
+
 /**
  * Initialize Weave for experiment tracking
  * Tries W&B cloud first, falls back to file-based logging
@@ -17,6 +24,9 @@ const initWeave = async () => {
     // Try to initialize W&B cloud
     if (config.wandbApiKey) {
       try {
+        // Show AI provider
+        simpleLog.info(`AI Provider: ${config.aiProvider}`);
+        
         await wandb.init({
           apiKey: config.wandbApiKey,
           project: config.wandbProject,
@@ -29,11 +39,11 @@ const initWeave = async () => {
         wandbRun = wandb;
         useCloudWeave = true;
         weaveClient = { initialized: true, cloud: true };
-        console.log(`✓ W&B initialized for project: ${config.wandbProject}`);
-        console.log(`✓ View at: https://wandb.ai/${config.wandbProject}`);
+        simpleLog.info(`W&B initialized for project: ${config.wandbProject}`);
+        simpleLog.info(`View at: https://wandb.ai/${config.wandbProject}`);
         return weaveClient;
       } catch (cloudError) {
-        console.warn('Failed to connect to W&B cloud, using file-based logging:', cloudError.message);
+        simpleLog.warn(`Failed to connect to W&B cloud, using file-based logging: ${cloudError.message}`);
       }
     }
     
@@ -62,12 +72,12 @@ const initWeave = async () => {
     
     useCloudWeave = false;
     weaveClient = { initialized: true, cloud: false, logFile };
-    console.log(`Weave logging initialized for project: ${config.wandbProject}`);
-    console.log(`Logs will be written to: ${logFile}`);
+    simpleLog.info(`Weave logging initialized for project: ${config.wandbProject}`);
+    simpleLog.info(`Logs will be written to: ${logFile}`);
     
     return weaveClient;
   } catch (error) {
-    console.error('Failed to initialize Weave:', error);
+    simpleLog.error(`Failed to initialize Weave: ${error.message}`);
     throw error;
   }
 };

@@ -59,37 +59,42 @@ app.use((req, res) => {
 let server;
 
 const startServer = async () => {
+  const { log } = require('./utils/logger');
+  
   try {
     // Initialize Weave logging
     await initWeave();
-    console.log('✓ Weave initialized');
+    log.info('Weave initialized');
 
     // Start server
     server = app.listen(config.port, () => {
-      console.log(`✓ Prompt Reels API running on port ${config.port}`);
-      console.log(`✓ Environment: ${config.nodeEnv}`);
-      console.log(`✓ Using Gemini model: ${config.geminiModel}`);
-      console.log(`✓ Weave project: ${config.wandbProject}`);
+      log.info(`Prompt Reels API running on port ${config.port}`);
+      log.info(`Environment: ${config.nodeEnv}`);
+      log.info(`Using Gemini model: ${config.geminiModel}`);
+      log.info(`Weave project: ${config.wandbProject}`);
       console.log(`\nHealth check: http://localhost:${config.port}/health`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    const { log } = require('./utils/logger');
+    log.error(`Failed to start server: ${error.message}`);
     process.exit(1);
   }
 };
 
 // Graceful shutdown
 const shutdown = () => {
-  console.log('\n⚠ Shutting down gracefully...');
+  const { log } = require('./utils/logger');
+  log.warn('Shutting down gracefully...');
+  
   if (server) {
     server.close(() => {
-      console.log('✓ Server closed');
+      log.info('Server closed');
       process.exit(0);
     });
     
     // Force close after 10 seconds
     setTimeout(() => {
-      console.error('⚠ Forced shutdown after timeout');
+      log.error('Forced shutdown after timeout');
       process.exit(1);
     }, 10000);
   } else {
