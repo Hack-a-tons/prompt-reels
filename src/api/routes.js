@@ -318,57 +318,62 @@ router.post('/fpo/run', async (req, res) => {
       startedAt: new Date().toISOString() 
     });
     
-    // Find actual article frames to use for testing
-    // Use frames from processed articles with actual article text as reference
-    const testData = {};
+    // Find described articles for testing
+    const { listArticles, getArticleDetails } = require('../core/articleWorkflow');
+    const articles = listArticles();
+    const describedArticles = articles.filter(a => a.status === 'described' || a.status === 'rated');
     
-    try {
-      const { listArticles, getArticleDetails } = require('../core/articleWorkflow');
-      const articles = listArticles();
-      
-      // Get articles that have been described (have frames)
-      const describedArticles = articles.filter(a => a.status === 'described' || a.status === 'rated');
-      
-      if (describedArticles.length > 0) {
-        console.log(`Found ${describedArticles.length} described articles for FPO testing`);
-        
-        // Use first described article for each domain
-        const domains = ['news', 'sports', 'reels'];
-        
-        for (const domain of domains) {
-          // Just use the first described article for all domains
-          // (we don't actually classify articles by domain yet)
-          const article = describedArticles[0];
-          const articleDetails = getArticleDetails(article.articleId);
-          
-          if (articleDetails && articleDetails.sceneData && articleDetails.sceneData.scenes.length > 0) {
-            const firstFrame = articleDetails.sceneData.scenes[0].frames[0];
-            const articleText = articleDetails.text || articleDetails.description || articleDetails.title;
-            
-            testData[domain] = {
-              path: firstFrame.path,
-              reference: articleText.substring(0, 500), // Use first 500 chars
-            };
-            
-            console.log(`✓ ${domain}: Using article ${article.articleId} (${firstFrame.path})`);
-          }
-        }
-        
-        // Also add default
-        if (testData.news) {
-          testData.default = testData.news;
-        }
-      } else {
-        console.log('⚠ No described articles found - FPO will run without evaluation');
-      }
-    } catch (e) {
-      console.error('Error preparing test data:', e.message);
-      console.log('⚠ FPO will run without image evaluation');
+    if (describedArticles.length === 0) {
+      // Clear flag before throwing error
+      clearFlag('fpo-running');
+      return res.status(400).json({ 
+        error: 'No described articles found. Please describe some articles first.' 
+      });
     }
+    
+    console.log(`Found ${describedArticles.length} described articles for FPO testing`);
+    console.log(`Running ${iterations} iterations with random article selection for diversity`);
 
     const results = [];
     
+    // Run iterations with RANDOM article selection for better diversity
     for (let i = 1; i <= iterations; i++) {
+      const testData = {};
+      
+      try {
+        // Select a random article for this iteration (improves diversity!)
+        const randomArticle = describedArticles[Math.floor(Math.random() * describedArticles.length)];
+        const articleDetails = getArticleDetails(randomArticle.articleId);
+        
+        if (articleDetails && articleDetails.sceneData && articleDetails.sceneData.scenes.length > 0) {
+          // Select a random scene from the article (more diversity!)
+          const randomSceneIndex = Math.floor(Math.random() * articleDetails.sceneData.scenes.length);
+          const randomScene = articleDetails.sceneData.scenes[randomSceneIndex];
+          
+          // Select a random frame from the scene
+          const randomFrameIndex = Math.floor(Math.random() * randomScene.frames.length);
+          const randomFrame = randomScene.frames[randomFrameIndex];
+          
+          const articleText = articleDetails.text || articleDetails.description || articleDetails.title;
+          
+          const domains = ['news', 'sports', 'reels'];
+          for (const domain of domains) {
+            testData[domain] = {
+              path: randomFrame.path,
+              reference: articleText.substring(0, 500),
+            };
+          }
+          
+          testData.default = testData.news;
+          
+          console.log(`Iteration ${i}: Using article ${randomArticle.articleId}, scene ${randomSceneIndex}, frame ${randomFrameIndex}`);
+        } else {
+          console.log(`⚠ Iteration ${i}: No valid frames in article ${randomArticle.articleId}`);
+        }
+      } catch (e) {
+        console.error(`Error preparing test data for iteration ${i}:`, e.message);
+      }
+      
       const result = await runFPOIteration(i, testData, {
         enableEvolution,
         evolutionInterval,

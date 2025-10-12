@@ -1214,6 +1214,35 @@ app.get('/prompts', (req, res) => {
     </div>
     
     <script>
+        // Check FPO status on page load and periodically
+        async function checkFPOStatus() {
+            try {
+                const res = await fetch('/api/flags/status');
+                const data = await res.json();
+                
+                const btn = document.getElementById('runFpoBtn');
+                const status = document.getElementById('fpoStatus');
+                
+                if (data.fpoRunning) {
+                    // FPO is running (from script or button)
+                    btn.style.display = 'none';
+                    status.style.display = 'flex';
+                } else {
+                    // FPO is not running
+                    btn.style.display = 'inline-block';
+                    status.style.display = 'none';
+                }
+            } catch (err) {
+                console.error('Error checking FPO status:', err);
+            }
+        }
+        
+        // Check status on page load
+        checkFPOStatus();
+        
+        // Poll every 3 seconds
+        setInterval(checkFPOStatus, 3000);
+        
         function switchTab(tab) {
             // Update tab buttons
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
