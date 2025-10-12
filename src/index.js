@@ -872,22 +872,25 @@ app.get('/prompts', (req, res) => {
     
     // Group templates into two categories for display
     const sceneVersions = templates.map((t, index) => ({
+      id: t.id,
       version: `1.${index}`,
       name: t.name,
       template: t.template,
+      generation: t.generation || 0,
       performance: {
         avgScore: t.performance && t.performance.length > 0 
           ? t.performance.reduce((sum, p) => sum + p.score, 0) / t.performance.length 
           : null,
+        weight: t.weight || 0,
         samples: t.performance ? t.performance.length : 0
       },
-      createdAt: new Date().toISOString(),
+      createdAt: t.createdAt || new Date().toISOString(),
       isActive: index === 0
     }));
     
-    // Sort: tested first (by score), then untested
+    // Sort: tested first (by weight - the actual optimization metric), then untested
     const testedVersions = sceneVersions.filter(v => v.performance.samples > 0)
-      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+      .sort((a, b) => (b.performance.weight || 0) - (a.performance.weight || 0));
     const untestedVersions = sceneVersions.filter(v => v.performance.samples === 0);
     
     // Same prompts are used for both scene description and video-article match
@@ -898,9 +901,9 @@ app.get('/prompts', (req, res) => {
       type: 'match'
     }));
     
-    // Sort match versions the same way
+    // Sort match versions the same way (by weight)
     const testedMatchVersions = matchVersions.filter(v => v.performance.samples > 0)
-      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+      .sort((a, b) => (b.performance.weight || 0) - (a.performance.weight || 0));
     const untestedMatchVersions = matchVersions.filter(v => v.performance.samples === 0);
     
     // Combine tested and untested
@@ -1108,7 +1111,9 @@ app.get('/prompts', (req, res) => {
                 <strong>Video-Article Match:</strong> AI rates how well video matches article content (0-100 score).
             </p>
             <p style="margin-top: 10px;">
-                Prompts are sorted <strong>best to worst</strong> based on average performance across multiple samples. Improvement percentages show gains over the baseline.
+                Prompts are sorted <strong>best to worst</strong> by <strong>weight</strong> (Thompson Sampling optimization metric). 
+                Weight balances performance and sample size - more reliable than simple averages. 
+                Improvement percentages show gains over the baseline prompt.
             </p>
         </div>
         
@@ -1131,6 +1136,7 @@ app.get('/prompts', (req, res) => {
                 const isBest = index === 0 && version.performance.samples > 0;
                 const isCurrent = version.isActive;
                 const score = version.performance.avgScore;
+                const weight = version.performance.weight || 0;
                 const samples = version.performance.samples || 0;
                 const scoreClass = score === null ? 'poor' : (score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor');
                 const isTested = samples > 0;
@@ -1143,11 +1149,23 @@ app.get('/prompts', (req, res) => {
                 let improvementClass = '';
                 if (isTested && testedVersions.length > 1) {
                   // Find actual baseline prompt (id: "baseline"), not just worst prompt
-                  const baseline = testedVersions.find(v => v.name && v.name.toLowerCase().includes('baseline'));
-                  if (baseline && baseline.performance.avgScore !== null && version.name !== baseline.name) {
-                    improvement = ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100);
-                    improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
-                    improvementClass = improvement > 0 ? 'positive' : (improvement < 0 ? 'negative' : '');
+                  const baseline = testedVersions.find(v => v.id === 'baseline' || (v.name && v.name.toLowerCase().includes('baseline')));
+                  if (baseline && baseline.performance.avgScore !== null && version.id !== baseline.id) {
+                    const baselineScore = baseline.performance.avgScore;
+                    const diff = score - baselineScore;
+                    
+                    // Handle negative or near-zero baseline scores
+                    if (Math.abs(baselineScore) < 0.001) {
+                      // Use absolute difference in percentage points when baseline is near zero
+                      improvement = diff * 100;
+                      improvementText = improvement > 0 ? `+${improvement.toFixed(1)}pp` : `${improvement.toFixed(1)}pp`;
+                    } else {
+                      // Normal percentage calculation with absolute baseline
+                      improvement = (diff / Math.abs(baselineScore)) * 100;
+                      // Keep sign based on actual difference, not baseline sign
+                      improvementText = diff > 0 ? `+${Math.abs(improvement).toFixed(1)}%` : `-${Math.abs(improvement).toFixed(1)}%`;
+                    }
+                    improvementClass = diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '');
                   }
                 }
                 
@@ -1167,9 +1185,9 @@ app.get('/prompts', (req, res) => {
                     </div>
                     
                     <div class="prompt-stats">
-                        <div class="stat">📊 ${samples} samples</div>
-                        <div class="stat">📅 ${createdDate}</div>
-                        <div class="stat">ID: ${version.id}</div>
+                        <div class="stat">📊 ${samples} sample${samples !== 1 ? 's' : ''}</div>
+                        <div class="stat">⚖️ Weight: ${weight.toFixed(4)}</div>
+                        <div class="stat">📈 Avg: ${score !== null ? (score * 100).toFixed(2) : 'N/A'}</div>
                     </div>
                     
                     <div class="prompt-text">${version.template}</div>
@@ -1185,23 +1203,36 @@ app.get('/prompts', (req, res) => {
                     <p>Process and rate some articles to start FPO optimization.</p>
                 </div>
             ` : sortedMatchVersions.map((version, index) => {
-                const isBest = index === 0;
+                const isBest = index === 0 && version.performance.samples > 0;
                 const isCurrent = version.isActive;
                 const score = version.performance.avgScore || 0;
+                const weight = version.performance.weight || 0;
                 const samples = version.performance.samples || 0;
                 const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
                 const generation = version.generation || 0;
                 const createdDate = version.createdAt ? new Date(version.createdAt).toLocaleString() : 'N/A';
                 
                 // Calculate improvement from baseline
-                const baseline = sortedMatchVersions.find(v => v.name && v.name.toLowerCase().includes('baseline'));
+                const baseline = sortedMatchVersions.find(v => v.id === 'baseline' || (v.name && v.name.toLowerCase().includes('baseline')));
                 let improvement = 0;
                 let improvementText = '';
                 let improvementClass = '';
-                if (baseline && baseline.performance.avgScore !== null && version.name !== baseline.name) {
-                  improvement = ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100);
-                  improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
-                  improvementClass = improvement > 0 ? 'positive' : (improvement < 0 ? 'negative' : '');
+                if (baseline && baseline.performance.avgScore !== null && version.id !== baseline.id && samples > 0) {
+                  const baselineScore = baseline.performance.avgScore;
+                  const diff = score - baselineScore;
+                  
+                  // Handle negative or near-zero baseline scores
+                  if (Math.abs(baselineScore) < 0.001) {
+                    // Use absolute difference in percentage points when baseline is near zero
+                    improvement = diff * 100;
+                    improvementText = improvement > 0 ? `+${improvement.toFixed(1)}pp` : `${improvement.toFixed(1)}pp`;
+                  } else {
+                    // Normal percentage calculation with absolute baseline
+                    improvement = (diff / Math.abs(baselineScore)) * 100;
+                    // Keep sign based on actual difference, not baseline sign
+                    improvementText = diff > 0 ? `+${Math.abs(improvement).toFixed(1)}%` : `-${Math.abs(improvement).toFixed(1)}%`;
+                  }
+                  improvementClass = diff > 0 ? 'positive' : (diff < 0 ? 'negative' : '');
                 }
                 
                 return `
@@ -1219,8 +1250,9 @@ app.get('/prompts', (req, res) => {
                     </div>
                     
                     <div class="prompt-stats">
-                        <div class="stat">📊 ${samples} samples</div>
-                        <div class="stat">📅 ${createdDate}</div>
+                        <div class="stat">📊 ${samples} sample${samples !== 1 ? 's' : ''}</div>
+                        <div class="stat">⚖️ Weight: ${weight.toFixed(4)}</div>
+                        <div class="stat">📈 Avg: ${score !== null ? (score * 100).toFixed(2) : 'N/A'}</div>
                     </div>
                     
                     <div class="prompt-text">${version.template}</div>
