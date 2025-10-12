@@ -51,6 +51,8 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] `detected.sh` - Show scene detection status
 - [x] `fetch-news.sh` - Fetch news articles with videos
 - [x] `status.sh` - **NEW:** Monitor queues, flags, and processing status
+- [x] `run-fpo.sh` - **NEW:** Run FPO iterations with random article selection
+- [x] `fpo-history.sh` - **NEW:** View FPO optimization history
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
 - [x] `cleanup.sh` - Clean with targets (all/articles/output/uploads/prompts)
 - [x] `evolve.sh` - Manage FPO evolution (start/stop/status)
@@ -88,6 +90,8 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Dark mode everywhere** - Consistent across all pages
 - [x] **Buttons hide immediately** - On click, shows spinners
 - [x] **Bigger FPO button** - Prominent "Run FPO Iteration" button
+- [x] **Prompts page color coding** - **FIXED:** Green only for > baseline, red for < baseline
+- [x] **FPO button auto-disables** - Hides when script runs, polls every 3s
 
 ### Queue & Background Processing
 - [x] **Persistent queue system** - Survives Docker restarts (data/queues/)
@@ -112,6 +116,10 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Finds described articles** - 13+ articles with frames
 - [x] **Semantic similarity scoring** - Real scores, not 0.0000
 - [x] **Fixed test data lookup** - Uses article-*_frames/ structure
+- [x] **run-fpo.sh script** - **NEW:** Command-line FPO with flexible syntax (10, -n 10, -n10)
+- [x] **Random article selection** - Each iteration uses different article/scene/frame
+- [x] **Improved diversity** - Better generalization, less overfitting
+- [x] **fpo-history.sh script** - View optimization progress and rankings
 
 ---
 

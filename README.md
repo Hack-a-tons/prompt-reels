@@ -1062,6 +1062,53 @@ Click **"🚀 Run FPO Iteration"** button to:
 
 **No more "No test data available"!** ✅
 
+### Command-Line FPO Script
+Run multiple FPO iterations easily from the command line:
+
+```bash
+# Run 1 iteration (default)
+./scripts/run-fpo.sh
+
+# Run 10 iterations (recommended for convergence)
+./scripts/run-fpo.sh 10
+./scripts/run-fpo.sh -n 10
+./scripts/run-fpo.sh -n10
+
+# Run 20 iterations (deep optimization)
+./scripts/run-fpo.sh 20
+
+# Disable evolution
+./scripts/run-fpo.sh -n 5 --no-evolution
+
+# On dev server
+./scripts/run-fpo.sh 10 dev
+```
+
+**Key Features:**
+- ✅ **Random Article Selection**: Each iteration uses a different random article/scene/frame
+- ✅ **Better Diversity**: Improves generalization and prevents overfitting
+- ✅ **Flag Integration**: Button auto-disables when script runs
+- ✅ **Flexible Syntax**: Supports `10`, `-n 10`, and `-n10` formats
+- ✅ **Shows Results**: Displays top prompts after completion
+
+**Why Random Selection Improves Results:**
+- Tests prompts on varied content (not just one article)
+- Rankings reflect general performance (not biased to single style)
+- More robust scores (less variance)
+- Better real-world accuracy (results transfer to new articles)
+
+**View History:**
+```bash
+# See optimization progress
+./scripts/fpo-history.sh
+
+# With detailed performance data
+./scripts/fpo-history.sh -d
+
+# Top 3 prompts only
+./scripts/fpo-history.sh -n 3
+```
+
 ---
 
 ## 📊 Video Optimization & Performance

@@ -56,6 +56,11 @@ while [[ $# -gt 0 ]]; do
             ITERATIONS="$2"
             shift 2
             ;;
+        -n*)
+            # Handle -n10 format (no space)
+            ITERATIONS="${1#-n}"
+            shift
+            ;;
         --no-evolution)
             EVOLUTION=false
             shift
@@ -64,8 +69,18 @@ while [[ $# -gt 0 ]]; do
             EVOLUTION_INTERVAL="$2"
             shift 2
             ;;
+        --evolution-interval*)
+            # Handle --evolution-interval5 format
+            EVOLUTION_INTERVAL="${1#--evolution-interval}"
+            shift
+            ;;
         prod|dev)
             ENVIRONMENT=$1
+            shift
+            ;;
+        [0-9]*)
+            # Handle bare number as iterations (e.g., "run-fpo.sh 10")
+            ITERATIONS="$1"
             shift
             ;;
         *)

@@ -1137,10 +1137,13 @@ app.get('/prompts', (req, res) => {
                 let improvementText = '';
                 let improvementClass = '';
                 if (isTested && testedVersions.length > 1) {
-                  const baseline = testedVersions[testedVersions.length - 1];
-                  improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
-                  improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
-                  improvementClass = improvement > 0 ? 'positive' : 'negative';
+                  // Find actual baseline prompt (id: "baseline"), not just worst prompt
+                  const baseline = testedVersions.find(v => v.name && v.name.toLowerCase().includes('baseline'));
+                  if (baseline && baseline.performance.avgScore !== null && version.name !== baseline.name) {
+                    improvement = ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100);
+                    improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+                    improvementClass = improvement > 0 ? 'positive' : (improvement < 0 ? 'negative' : '');
+                  }
                 }
                 
                 return `
@@ -1182,10 +1185,15 @@ app.get('/prompts', (req, res) => {
                 const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
                 
                 // Calculate improvement from baseline
-                const baseline = sortedMatchVersions[sortedMatchVersions.length - 1];
-                const improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
-                const improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
-                const improvementClass = improvement > 0 ? 'positive' : 'negative';
+                const baseline = sortedMatchVersions.find(v => v.name && v.name.toLowerCase().includes('baseline'));
+                let improvement = 0;
+                let improvementText = '';
+                let improvementClass = '';
+                if (baseline && baseline.performance.avgScore !== null && version.name !== baseline.name) {
+                  improvement = ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100);
+                  improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+                  improvementClass = improvement > 0 ? 'positive' : (improvement < 0 ? 'negative' : '');
+                }
                 
                 return `
                 <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''}">
@@ -1195,7 +1203,7 @@ app.get('/prompts', (req, res) => {
                     <div class="prompt-header">
                         <div>
                             <div class="prompt-version">Version ${version.version}</div>
-                            ${improvement !== 0 ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
+                            ${improvementText ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
                         </div>
                         <div class="prompt-score ${scoreClass}">${(score * 100).toFixed(1)}</div>
                     </div>
