@@ -1075,7 +1075,7 @@ app.get('/prompts', (req, res) => {
                 <a href="/" class="back-link" style="position: static; margin-top: 10px; display: inline-block;">← Back to Dashboard</a>
             </div>
             <div style="display: flex; gap: 15px; align-items: center;">
-                <button id="runFpoBtn" class="add-articles-btn" onclick="runFPO()" style="background: #7c3aed;">
+                <button id="runFpoBtn" class="add-articles-btn" onclick="runFPO()" style="background: #7c3aed; font-size: 16px; padding: 12px 24px;">
                     🚀 Run FPO Iteration
                 </button>
                 <span id="fpoStatus" style="display: none; color: #71767b; font-size: 14px;">

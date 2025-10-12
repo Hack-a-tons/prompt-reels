@@ -305,32 +305,53 @@ router.post('/fpo/run', async (req, res) => {
       evolutionInterval = 2,
     } = req.body;
     
-    // Find an actual extracted frame to use for testing
-    let testFramePath = null;
+    // Find actual article frames to use for testing
+    // Use frames from processed articles with actual article text as reference
+    const testData = {};
+    
     try {
-      const outputDirs = fs.readdirSync(config.outputDir)
-        .filter(d => d.startsWith('video-') && fs.statSync(path.join(config.outputDir, d)).isDirectory());
+      const { listArticles, getArticleDetails } = require('../core/articleWorkflow');
+      const articles = listArticles();
       
-      if (outputDirs.length > 0) {
-        const latestDir = outputDirs[outputDirs.length - 1];
-        const frames = fs.readdirSync(path.join(config.outputDir, latestDir))
-          .filter(f => f.endsWith('.jpg'));
+      // Get articles that have been described (have frames)
+      const describedArticles = articles.filter(a => a.status === 'described' || a.status === 'rated');
+      
+      if (describedArticles.length > 0) {
+        console.log(`Found ${describedArticles.length} described articles for FPO testing`);
         
-        if (frames.length > 0) {
-          testFramePath = path.join(config.outputDir, latestDir, frames[0]);
+        // Use first described article for each domain
+        const domains = ['news', 'sports', 'reels'];
+        
+        for (const domain of domains) {
+          // Just use the first described article for all domains
+          // (we don't actually classify articles by domain yet)
+          const article = describedArticles[0];
+          const articleDetails = getArticleDetails(article.articleId);
+          
+          if (articleDetails && articleDetails.sceneData && articleDetails.sceneData.scenes.length > 0) {
+            const firstFrame = articleDetails.sceneData.scenes[0].frames[0];
+            const articleText = articleDetails.text || articleDetails.description || articleDetails.title;
+            
+            testData[domain] = {
+              path: firstFrame.path,
+              reference: articleText.substring(0, 500), // Use first 500 chars
+            };
+            
+            console.log(`✓ ${domain}: Using article ${article.articleId} (${firstFrame.path})`);
+          }
         }
+        
+        // Also add default
+        if (testData.news) {
+          testData.default = testData.news;
+        }
+      } else {
+        console.log('⚠ No described articles found - FPO will run without evaluation');
       }
     } catch (e) {
-      console.log('No test frames available, FPO will run without image evaluation');
+      console.error('Error preparing test data:', e.message);
+      console.log('⚠ FPO will run without image evaluation');
     }
-    
-    // Prepare test data
-    const testData = testFramePath ? {
-      default: {
-        path: testFramePath,
-        reference: 'A sample scene from a video',
-      },
-    } : {};
 
     const results = [];
     
