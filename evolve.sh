@@ -271,13 +271,14 @@ show_status() {
     
     counter=1
     echo "$response" | jq -r '.templates | sort_by(-.weight) | limit(5; .[]) | 
-        {name, id, weight, generation: (.generation // 0), parents: (.parents // [])} | 
+        {name, id, weight, generation: (.generation // 0), parents: (.parents // []), template} | 
         @json' | while read -r prompt; do
         name=$(echo "$prompt" | jq -r '.name')
         id=$(echo "$prompt" | jq -r '.id')
         weight=$(echo "$prompt" | jq -r '.weight')
         generation=$(echo "$prompt" | jq -r '.generation')
         parents=$(echo "$prompt" | jq -r '.parents | join(", ")')
+        template=$(echo "$prompt" | jq -r '.template')
         
         echo -e "${GREEN}$counter. $name ($id)${NC}"
         echo -e "   Weight: $weight"
@@ -287,6 +288,7 @@ show_status() {
                 echo -e "   Parents: $parents"
             fi
         fi
+        echo -e "   Prompt: \"$template\""
         echo ""
         
         counter=$((counter + 1))
