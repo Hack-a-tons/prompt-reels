@@ -102,8 +102,11 @@ const describeImage = async (imagePath, prompt) => {
  * @param {number} sceneId - Scene identifier
  * @param {number} start - Scene start time
  * @param {number} end - Scene end time
+ * @param {number} retryCount - Internal retry counter (do not pass manually)
  */
-const describeScene = async (framePaths, sceneId, start, end) => {
+const describeScene = async (framePaths, sceneId, start, end, retryCount = 0) => {
+  const MAX_RETRIES = 1; // Only try both providers once
+  
   try {
     // Read all frame images
     const frameData = framePaths.map(path => {
@@ -179,15 +182,21 @@ Keep the description clear, factual, and suitable for video analysis.`;
   } catch (error) {
     console.error(`Error describing scene ${sceneId} with ${currentProvider}:`, error.message);
     
+    // Check if we've exceeded retry limit
+    if (retryCount >= MAX_RETRIES) {
+      console.error(`Max retries (${MAX_RETRIES}) exceeded for scene ${sceneId}`);
+      throw new Error(`Failed to describe scene after trying both providers: ${error.message}`);
+    }
+    
     // Try fallback provider
     const fallbackProvider = currentProvider === 'azure' ? 'gemini' : 'azure';
     const fallbackClient = fallbackProvider === 'azure' ? azureClient : geminiClient;
     
     if (fallbackClient) {
-      console.log(`Switching to ${fallbackProvider} for scene description`);
+      console.log(`Switching to ${fallbackProvider} for scene description (retry ${retryCount + 1}/${MAX_RETRIES})`);
       const prevProvider = currentProvider;
       currentProvider = fallbackProvider;
-      const result = await describeScene(framePaths, sceneId, start, end);
+      const result = await describeScene(framePaths, sceneId, start, end, retryCount + 1);
       currentProvider = prevProvider; // Restore provider
       return result;
     }

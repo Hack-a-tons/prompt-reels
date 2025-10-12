@@ -866,7 +866,12 @@ router.post('/articles/:articleId/describe', async (req, res) => {
     for (let scene of scenesWithFrames) {
       if (scene.frames && scene.frames.length > 0) {
         const framePaths = scene.frames.map(f => f.path);
-        const description = await describeScene(framePaths);
+        const description = await describeScene(
+          framePaths,
+          scene.sceneId,
+          scene.start,
+          scene.end
+        );
         scene.description = description;
       }
     }
