@@ -255,6 +255,7 @@ router.get('/fpo/status', (req, res) => {
       templates: prompts.templates.map(t => ({
         id: t.id,
         name: t.name,
+        template: t.template,
         weight: t.weight,
         performanceHistory: t.performance,
         latestScore: t.performance[t.performance.length - 1]?.score,

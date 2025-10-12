@@ -86,15 +86,18 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Extract and display ranked prompts
+counter=1
 echo "$response" | jq -r --arg limit "$LIMIT" '
     .templates 
     | sort_by(-.weight) 
     | limit($limit | tonumber; .[])
-    | "\(.name) (\(.id)): \(.weight | tostring)"
+    | "\(.name)||||\(.id)||||\(.weight)||||\(.template)"
 ' | while IFS= read -r line; do
-    # Extract parts
-    name=$(echo "$line" | cut -d':' -f1)
-    weight=$(echo "$line" | cut -d':' -f2 | xargs)
+    # Extract parts using custom delimiter
+    name=$(echo "$line" | cut -d'|' -f1)
+    id=$(echo "$line" | cut -d'|' -f5)
+    weight=$(echo "$line" | cut -d'|' -f9)
+    template=$(echo "$line" | cut -d'|' -f13-)
     
     # Color based on weight
     if (( $(echo "$weight > 0" | bc -l) )); then
@@ -105,7 +108,13 @@ echo "$response" | jq -r --arg limit "$LIMIT" '
         color="${NC}"
     fi
     
-    echo -e "${color}${name}: ${weight}${NC}"
+    # Display with numbering
+    echo -e "${color}${counter}. ${name} (${id})${NC}"
+    echo -e "${color}   Weight: ${weight}${NC}"
+    echo -e "   Prompt: \"${template}\""
+    echo ""
+    
+    counter=$((counter + 1))
 done
 
 echo ""
