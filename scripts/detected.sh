@@ -129,8 +129,8 @@ if [ "$ENVIRONMENT" = "prod" ]; then
             basename=$(basename "$file" _scenes.json)
             
             # Get scene count
-            scene_count=$(ssh reels.hurated.com "cat prompt-reels/$file" | jq -r '.sceneCount')
-            timestamp=$(ssh reels.hurated.com "cat prompt-reels/$file" | jq -r '.timestamp' | cut -d'T' -f1)
+            scene_count=$(ssh reels.hurated.com "cat $file" | jq -r '.sceneCount')
+            timestamp=$(ssh reels.hurated.com "cat $file" | jq -r '.timestamp' | cut -d'T' -f1)
             
             echo -e "${GREEN}$counter. $basename${NC}"
             echo -e "   Scenes: $scene_count"
