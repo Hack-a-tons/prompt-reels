@@ -263,7 +263,7 @@ app.get('/', (req, res) => {
                     let videoHtml = '<div class="no-video">No video</div>';
                     if (article.hasLocalVideo) {
                         const videoPath = `/api/articles/${article.articleId}.mp4`;
-                        videoHtml = `<video class="video-preview" muted loop playsinline preload="metadata" onloadedmetadata="this.play().catch(e=>console.log('Autoplay blocked'))"><source src="${videoPath}" type="video/mp4"></video>`;
+                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${videoPath}" type="video/mp4"></video>`;
                     }
                     
                     // Score coloring: high (>70) = green, medium (40-70) = yellow, low (<40) = red
@@ -672,19 +672,12 @@ app.get('/articles/:articleId', (req, res) => {
         
         ${hasLocalVideo ? `
         <div class="video-container">
-            <video controls muted playsinline preload="metadata" id="mainVideo">
+            <video controls autoplay muted playsinline>
                 <source src="${videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </div>
         <a href="${videoUrl}" class="video-link" target="_blank">🔗 Direct video link: ${videoUrl}</a>
-        <script>
-            // Try to autoplay, but don't fail if blocked
-            const video = document.getElementById('mainVideo');
-            video.play().catch(err => {
-                console.log('Autoplay blocked, user interaction required:', err.message);
-            });
-        </script>
         ` : `
         <div class="no-video">
             <h2>📹 Video Not Downloaded</h2>
@@ -1138,6 +1131,8 @@ app.get('/prompts', (req, res) => {
                 const samples = version.performance.samples || 0;
                 const scoreClass = score === null ? 'poor' : (score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor');
                 const isTested = samples > 0;
+                const generation = version.generation || 0;
+                const createdDate = version.createdAt ? new Date(version.createdAt).toLocaleString() : 'N/A';
                 
                 // Calculate improvement from baseline (only for tested prompts)
                 let improvement = 0;
@@ -1158,10 +1153,11 @@ app.get('/prompts', (req, res) => {
                     ${isBest ? '<span class="badge best">🏆 BEST</span>' : ''}
                     ${!isTested ? '<span class="badge" style="background: #71767b;">NOT TESTED</span>' : ''}
                     ${isCurrent && !isBest && isTested ? '<span class="badge current">CURRENT</span>' : ''}
+                    ${generation > 0 ? `<span class="badge" style="background: #7c3aed;">GEN ${generation}</span>` : ''}
                     
                     <div class="prompt-header">
                         <div>
-                            <div class="prompt-version">${version.name || 'Version ' + version.version}</div>
+                            <div class="prompt-version">${version.name || version.id}</div>
                             ${improvementText ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
                         </div>
                         <div class="prompt-score ${scoreClass}">${isTested ? (score * 100).toFixed(1) : '—'}</div>
@@ -1169,7 +1165,8 @@ app.get('/prompts', (req, res) => {
                     
                     <div class="prompt-stats">
                         <div class="stat">📊 ${samples} samples</div>
-                        ${isTested ? `<div class="stat">Rank: #${testedVersions.indexOf(version) + 1}</div>` : '<div class="stat" style="color: #71767b;">Awaiting test</div>'}
+                        <div class="stat">📅 ${createdDate}</div>
+                        <div class="stat">ID: ${version.id}</div>
                     </div>
                     
                     <div class="prompt-text">${version.template}</div>
@@ -1190,6 +1187,8 @@ app.get('/prompts', (req, res) => {
                 const score = version.performance.avgScore || 0;
                 const samples = version.performance.samples || 0;
                 const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
+                const generation = version.generation || 0;
+                const createdDate = version.createdAt ? new Date(version.createdAt).toLocaleString() : 'N/A';
                 
                 // Calculate improvement from baseline
                 const baseline = sortedMatchVersions.find(v => v.name && v.name.toLowerCase().includes('baseline'));
@@ -1206,10 +1205,11 @@ app.get('/prompts', (req, res) => {
                 <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''}">
                     ${isBest ? '<span class="badge best">🏆 BEST</span>' : ''}
                     ${isCurrent && !isBest ? '<span class="badge current">CURRENT</span>' : ''}
+                    ${generation > 0 ? `<span class="badge" style="background: #7c3aed;">GEN ${generation}</span>` : ''}
                     
                     <div class="prompt-header">
                         <div>
-                            <div class="prompt-version">Version ${version.version}</div>
+                            <div class="prompt-version">${version.name || version.id}</div>
                             ${improvementText ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
                         </div>
                         <div class="prompt-score ${scoreClass}">${(score * 100).toFixed(1)}</div>
@@ -1217,8 +1217,7 @@ app.get('/prompts', (req, res) => {
                     
                     <div class="prompt-stats">
                         <div class="stat">📊 ${samples} samples</div>
-                        <div class="stat">📅 ${new Date(version.createdAt).toLocaleString()}</div>
-                        <div class="stat">Rank: #${index + 1}</div>
+                        <div class="stat">📅 ${createdDate}</div>
                     </div>
                     
                     <div class="prompt-text">${version.template}</div>

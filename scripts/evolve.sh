@@ -85,9 +85,19 @@ while [[ $# -gt 0 ]]; do
             ITERATIONS=$2
             shift 2
             ;;
+        -n*)
+            # Handle -n10 format (no space)
+            ITERATIONS="${1#-n}"
+            shift
+            ;;
         -i|--interval)
             EVOLUTION_INTERVAL=$2
             shift 2
+            ;;
+        -i*)
+            # Handle -i2 format (no space)
+            EVOLUTION_INTERVAL="${1#-i}"
+            shift
             ;;
         --no-evolution)
             ENABLE_EVOLUTION=false
@@ -99,6 +109,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         dev|prod)
             ENVIRONMENT=$1
+            shift
+            ;;
+        [0-9]*)
+            # Handle bare number as iterations (e.g., "evolve.sh 10")
+            ITERATIONS="$1"
+            COMMAND="start"
             shift
             ;;
         *)

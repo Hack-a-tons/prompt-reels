@@ -1062,52 +1062,69 @@ Click **"🚀 Run FPO Iteration"** button to:
 
 **No more "No test data available"!** ✅
 
-### Command-Line FPO Script
-Run multiple FPO iterations easily from the command line:
+### FPO Command-Line Script
+
+**Important:** FPO optimizes **ONE set of prompts** used for BOTH scene description AND video-article matching. Better descriptions → Better matching!
+
+Run multiple FPO iterations easily:
 
 ```bash
-# Run 1 iteration (default)
-./scripts/run-fpo.sh
+# Run 10 iterations (flexible syntax)
+./scripts/evolve.sh 10          # Bare number
+./scripts/evolve.sh -n 10       # With flag  
+./scripts/evolve.sh -n10        # No space
+./scripts/evolve.sh start -n 10 # Explicit
 
-# Run 10 iterations (recommended for convergence)
-./scripts/run-fpo.sh 10
-./scripts/run-fpo.sh -n 10
-./scripts/run-fpo.sh -n10
+# Show current best prompts
+./scripts/evolve.sh status
+./scripts/evolve.sh show
 
-# Run 20 iterations (deep optimization)
-./scripts/run-fpo.sh 20
-
-# Disable evolution
-./scripts/run-fpo.sh -n 5 --no-evolution
+# Disable evolution (testing only)
+./scripts/evolve.sh 5 --no-evolution
 
 # On dev server
-./scripts/run-fpo.sh 10 dev
+./scripts/evolve.sh 10 dev
 ```
 
 **Key Features:**
-- ✅ **Random Article Selection**: Each iteration uses a different random article/scene/frame
-- ✅ **Better Diversity**: Improves generalization and prevents overfitting
+- ✅ **Random Article Selection**: Each iteration uses different article/scene/frame for better diversity
+- ✅ **Single Prompt Set**: Same 5 prompts optimized for ALL tasks
+- ✅ **Genetic Evolution**: Every 2 iterations, creates new prompts by combining best ones
 - ✅ **Flag Integration**: Button auto-disables when script runs
-- ✅ **Flexible Syntax**: Supports `10`, `-n 10`, and `-n10` formats
-- ✅ **Shows Results**: Displays top prompts after completion
+- ✅ **Flexible Syntax**: Supports `10`, `-n 10`, `-n10` formats
+- ✅ **Auto-Used**: Best prompt automatically used for scene description and matching
 
-**Why Random Selection Improves Results:**
-- Tests prompts on varied content (not just one article)
-- Rankings reflect general performance (not biased to single style)
-- More robust scores (less variance)
-- Better real-world accuracy (results transfer to new articles)
+**The 5 Original Prompts:**
+1. `baseline` - Simple description
+2. `structured` - Organized analysis (numbered)
+3. `narrative` - Story-style narration
+4. `technical` - Composition/lighting details
+5. `comprehensive` - Full analysis (usually wins 🏆)
 
-**View History:**
+**View Optimization History:**
 ```bash
-# See optimization progress
+# See top ranked prompts with templates
 ./scripts/fpo-history.sh
 
-# With detailed performance data
+# Detailed performance data
 ./scripts/fpo-history.sh -d
 
-# Top 3 prompts only
+# Top 3 only
 ./scripts/fpo-history.sh -n 3
 ```
+
+**How FPO Works:**
+1. Picks random article/scene/frame
+2. Evaluates ALL 5 prompts on that data
+3. Compares output to article text (semantic similarity)
+4. Updates rankings by performance
+5. Every 2 iterations: Creates new prompts via genetic crossover
+6. Best prompt becomes default for all operations
+
+**Web UI:** https://reels.hurated.com/prompts
+- Both tabs (Scene Description & Video-Article Match) show **same prompts**
+- Top-ranked = best for **both tasks**
+- Color coded: Green (+X%) = better than baseline, Red (-X%) = worse
 
 ---
 

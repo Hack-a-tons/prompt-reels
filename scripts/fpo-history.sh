@@ -175,17 +175,9 @@ echo "$templates" | jq -c '.[]' | head -n "$TOP_N" | while IFS= read -r template
         parent_info=""
     fi
     
-    echo -e "${rank_color}${rank_emoji} #$counter${NC} ${CYAN}$id${NC} $gen_badge"
-    echo -e "   Weight: ${rank_color}$(printf "%.6f" $weight)${NC}"
-    
-    if [ "$sample_count" -gt 0 ]; then
-        echo -e "   Samples: $sample_count | Avg Score: $(printf "%.4f" $avg_score)"
-    else
-        echo -e "   ${YELLOW}Not tested yet${NC}"
-    fi
-    
-    if [ -n "$parent_info" ]; then
-        echo -e "   $parent_info"
+    echo -e "${rank_color}${rank_emoji} #$counter ${CYAN}$id${NC} ${PURPLE}$gen_badge${NC}"
+    echo -e "   Weight: $(printf "%.6f" $weight) | Samples: $sample_count | Avg Score: $(printf "%.4f" $avg_score)"
+    echo -e "   Template: \"$template_text\""
     fi
     
     if [ "$SHOW_DETAILS" = true ]; then

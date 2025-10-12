@@ -50,17 +50,17 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] `describe-scenes.sh` - Extract frames + AI descriptions
 - [x] `detected.sh` - Show scene detection status
 - [x] `fetch-news.sh` - Fetch news articles with videos
-- [x] `status.sh` - **NEW:** Monitor queues, flags, and processing status
-- [x] `run-fpo.sh` - **NEW:** Run FPO iterations with random article selection
-- [x] `fpo-history.sh` - **NEW:** View FPO optimization history
+- [x] `status.sh` - Monitor queues, flags, and processing status
+- [x] `evolve.sh` - **ENHANCED:** Run FPO with flexible syntax (10, -n 10, -n10), random article selection
+- [x] `fpo-history.sh` - View FPO optimization history with prompt templates
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
 - [x] `cleanup.sh` - Clean with targets (all/articles/output/uploads/prompts)
-- [x] `evolve.sh` - Manage FPO evolution (start/stop/status)
 - [x] `show-prompts.sh` - Display prompt templates
 - [x] `reset-prompts.sh` - Reset prompts to default state
 - [x] `fix-nginx-upload-limit.sh` - Guide for nginx config
 - [x] `free-port.sh` - Kill process on port
 - [x] `run-dev.sh` - Start dev server with nodemon
+- [x] `test.sh` - Test script
 
 ### Federated Prompt Optimization (FPO)
 - [x] 5+ prompt templates with performance tracking
@@ -116,10 +116,13 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Finds described articles** - 13+ articles with frames
 - [x] **Semantic similarity scoring** - Real scores, not 0.0000
 - [x] **Fixed test data lookup** - Uses article-*_frames/ structure
-- [x] **run-fpo.sh script** - **NEW:** Command-line FPO with flexible syntax (10, -n 10, -n10)
+- [x] **evolve.sh enhanced** - Flexible syntax (10, -n 10, -n10), merged with run-fpo.sh
 - [x] **Random article selection** - Each iteration uses different article/scene/frame
 - [x] **Improved diversity** - Better generalization, less overfitting
-- [x] **fpo-history.sh script** - View optimization progress and rankings
+- [x] **fpo-history.sh shows templates** - View prompts with their actual text
+- [x] **Single prompt set** - Same 5 prompts for scene description AND matching
+- [x] **Genetic evolution** - Creates new prompts every 2 iterations
+- [x] **Auto-used best prompt** - Top-ranked prompt automatically used everywhere
 
 ---
 
