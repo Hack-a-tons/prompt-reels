@@ -420,7 +420,7 @@ router.get('/scenes/:videoId', (req, res) => {
     }
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
-    const videoPath = sceneData.videoPath || `uploads/${videoId}.mp4`;
+    const videoPath = sceneData.videoPath || `uploads/articles/${videoId}.mp4`;
     
     // Helper function for time formatting
     const formatTime = (seconds) => {
@@ -928,6 +928,7 @@ router.post('/articles/:articleId/describe', async (req, res) => {
     const sceneData = {
       articleId,
       videoId: articleId,  // Use same ID for now
+      videoPath: videoPath,  // Store relative path for scene viewer
       sceneCount: scenes.length,
       threshold,
       detectedAt: new Date().toISOString(),

@@ -1,8 +1,38 @@
+const { log } = require('../utils/logger');
+const config = require('../config');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const config = require('../config');
-const { log } = require('../utils/logger');
+
+/**
+ * Clean article text by removing common junk patterns
+ * @param {string} text - Raw article text
+ * @returns {string} Cleaned text
+ */
+const cleanArticleText = (text) => {
+  if (!text) return '';
+  
+  let cleaned = text;
+  
+  // Remove "watch now" sections with VIDEO timestamps (common on CNBC, etc.)
+  // Pattern: "watch now\nwatch now\nVIDEO05:11\nTitle\n3 hours ago"
+  cleaned = cleaned.replace(/watch now\s*watch now\s*VIDEO\d{1,2}:\d{2}\s*[^\n]+\s*\d+\s+(hours?|minutes?|days?)\s+ago/gi, '');
+  
+  // Remove standalone "watch now" lines
+  cleaned = cleaned.replace(/^watch now\s*$/gim, '');
+  
+  // Remove VIDEO timestamp patterns (e.g., "VIDEO05:11")
+  cleaned = cleaned.replace(/VIDEO\d{1,2}:\d{2}/gi, '');
+  
+  // Remove excessive newlines (more than 2 in a row)
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // Trim whitespace
+  cleaned = cleaned.trim();
+  
+  return cleaned;
+};
+
 const { ArticleStatus } = require('./articleWorkflow');
 
 /**
@@ -450,8 +480,8 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
               poster: videoData.poster || null,
             },
             title: article.title,
-            description: article.content || '',
-            text: article.raw_content || article.content || '',
+            description: cleanArticleText(article.content || ''),
+            text: cleanArticleText(article.raw_content || article.content || ''),
             score: article.score || 0,
             published: article.published_date || null,
             fetchedAt: new Date().toISOString(),
