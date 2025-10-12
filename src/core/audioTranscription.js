@@ -10,6 +10,10 @@ const FormData = require('form-data');
 const axios = require('axios');
 const config = require('../config');
 
+// Rate limiting for Whisper API (3 requests per minute = 20s between calls)
+let lastWhisperCall = 0;
+const WHISPER_MIN_INTERVAL = 20000; // 20 seconds
+
 /**
  * Extract audio segment from video
  * @param {string} videoPath - Path to video file
@@ -71,12 +75,24 @@ const transcribeAudio = async (audioPath) => {
     formData.append('language', 'en'); // Can be made configurable
     formData.append('response_format', 'text');
     
+    // Respect rate limit (3 requests per minute)
+    const now = Date.now();
+    const timeSinceLastCall = now - lastWhisperCall;
+    
+    if (timeSinceLastCall < WHISPER_MIN_INTERVAL) {
+      const waitTime = WHISPER_MIN_INTERVAL - timeSinceLastCall;
+      console.log(`Whisper rate limit: waiting ${(waitTime / 1000).toFixed(1)}s before next call...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
     // Call Azure OpenAI Whisper API with retry on rate limit
     let attempt = 0;
     const maxAttempts = 3;
     
     while (attempt < maxAttempts) {
       try {
+        lastWhisperCall = Date.now(); // Track call time
+        
         const response = await axios.post(
           `${config.azureOpenAI.endpoint}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`,
           formData,

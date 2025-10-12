@@ -125,6 +125,24 @@ app.get('/', (req, res) => {
             text-align: left;
             border-bottom: 1px solid #2f3336;
         }
+        .thumbnail {
+            width: 120px;
+            height: 68px;
+            object-fit: cover;
+            border-radius: 6px;
+            background: #0f1419;
+        }
+        .no-thumbnail {
+            width: 120px;
+            height: 68px;
+            background: #2f3336;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #71767b;
+            font-size: 12px;
+        }
         th { background: #1c1f23; color: #71767b; font-weight: 600; font-size: 13px; text-transform: uppercase; }
         tr:hover { background: #1c1f23; }
         .status {
@@ -215,6 +233,7 @@ app.get('/', (req, res) => {
         <table>
             <thead>
                 <tr>
+                    <th>Preview</th>
                     <th>Article</th>
                     <th>Source</th>
                     <th>Status</th>
@@ -226,8 +245,16 @@ app.get('/', (req, res) => {
                 </tr>
             </thead>
             <tbody>
-                ${articles.map(article => `
+                ${articles.map(article => {
+                    // Get thumbnail from first scene frame
+                    let thumbnailHtml = '<div class="no-thumbnail">No preview</div>';
+                    if (article.sceneCount && article.sceneCount > 0) {
+                        const thumbnailPath = `/output/${article.articleId}_frames/scene-1/frame-1.jpg`;
+                        thumbnailHtml = `<img src="${thumbnailPath}" class="thumbnail" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="no-thumbnail" style="display:none;">No preview</div>`;
+                    }
+                    return `
                 <tr>
+                    <td>${thumbnailHtml}</td>
                     <td>
                         <div class="title">
                             <a href="/articles/${article.articleId}">${article.title}</a>
@@ -252,7 +279,8 @@ app.get('/', (req, res) => {
                             `<a href="/api/scenes/${article.articleId}" class="btn" target="_blank">View Scenes</a>` : ''}
                     </td>
                 </tr>
-                `).join('')}
+                `;
+                }).join('')}
             </tbody>
         </table>
         `}
