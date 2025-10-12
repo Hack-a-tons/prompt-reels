@@ -4,12 +4,16 @@ const path = require('path');
 const config = require('./config');
 const routes = require('./api/routes');
 const { initWeave } = require('./core/weave');
+const { logMiddleware } = require('./utils/logger');
 
 const app = express();
 
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Logging middleware (logs all API calls with timestamp, IP, request/response)
+app.use(logMiddleware);
 
 // Serve static files (videos and extracted frames)
 app.use('/uploads', express.static(path.join(__dirname, '..', config.uploadDir)));
@@ -37,7 +41,9 @@ app.use('/api', routes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  const { log } = require('./utils/logger');
+  log.error(`${req.method} ${req.path} - ${err.message}`);
+  
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
     stack: config.nodeEnv === 'development' ? err.stack : undefined,
