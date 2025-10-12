@@ -71,35 +71,66 @@ const transcribeAudio = async (audioPath) => {
     formData.append('language', 'en'); // Can be made configurable
     formData.append('response_format', 'text');
     
-    // Call Azure OpenAI Whisper API
-    const response = await axios.post(
-      `${config.azureOpenAI.endpoint}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`,
-      formData,
-      {
-        headers: {
-          'api-key': config.azureOpenAI.apiKey,
-          ...formData.getHeaders(),
-        },
-        timeout: 60000, // 60 seconds
+    // Call Azure OpenAI Whisper API with retry on rate limit
+    let attempt = 0;
+    const maxAttempts = 3;
+    
+    while (attempt < maxAttempts) {
+      try {
+        const response = await axios.post(
+          `${config.azureOpenAI.endpoint}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`,
+          formData,
+          {
+            headers: {
+              'api-key': config.azureOpenAI.apiKey,
+              ...formData.getHeaders(),
+            },
+            timeout: 60000, // 60 seconds
+          }
+        );
+        
+        const transcript = response.data.trim();
+        
+        // Return null if transcript is empty or just noise markers
+        if (!transcript || transcript.length < 3) {
+          return null;
+        }
+        
+        return transcript;
+        
+      } catch (error) {
+        // Handle rate limiting (429)
+        if (error.response?.status === 429) {
+          attempt++;
+          
+          // Check for Retry-After header
+          const retryAfter = error.response.headers['retry-after'];
+          const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000; // Exponential backoff
+          
+          if (attempt < maxAttempts) {
+            console.warn(`Rate limited (429), retrying in ${waitTime/1000}s (attempt ${attempt}/${maxAttempts})...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          } else {
+            console.error(`Rate limit exceeded after ${maxAttempts} attempts, skipping transcription`);
+            return null;
+          }
+        }
+        
+        // Handle no speech detected
+        if (error.response?.status === 400 && error.response?.data?.includes('no speech')) {
+          return null;
+        }
+        
+        // Other errors
+        console.error(`Transcription failed: ${error.message}`);
+        return null;
       }
-    );
-    
-    const transcript = response.data.trim();
-    
-    // Return null if transcript is empty or just noise markers
-    if (!transcript || transcript.length < 3) {
-      return null;
     }
     
-    return transcript;
+    return null;
   } catch (error) {
-    // Don't throw - transcription failure shouldn't stop scene description
-    if (error.response?.status === 400 && error.response?.data?.includes('no speech')) {
-      // No speech detected - this is fine
-      return null;
-    }
-    
-    console.error(`Transcription failed: ${error.message}`);
+    console.error(`Transcription error: ${error.message}`);
     return null;
   }
 };

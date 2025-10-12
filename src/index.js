@@ -178,9 +178,12 @@ app.get('/', (req, res) => {
     <div class="container">
         <div class="header">
             <h1>🎬 Prompt Reels - Article Dashboard</h1>
-            <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()">
-                + Add 10 Articles
-            </button>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <a href="/prompts" class="add-articles-btn" style="text-decoration: none; background: #2f3336;">🧠 View Prompts</a>
+                <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()">
+                    + Add 10 Articles
+                </button>
+            </div>
         </div>
         
         <div class="stats">
@@ -305,6 +308,18 @@ app.get('/', (req, res) => {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span>Adding articles...';
             
+            // Auto-refresh every 3 seconds to show progress
+            const refreshInterval = setInterval(() => {
+                const currentCount = document.querySelectorAll('tbody tr').length;
+                fetch('/api/dashboard')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.count > currentCount) {
+                            location.reload();
+                        }
+                    });
+            }, 3000);
+            
             try {
                 const res = await fetch('/api/articles/batch-add', {
                     method: 'POST',
@@ -312,6 +327,7 @@ app.get('/', (req, res) => {
                     body: JSON.stringify({ count: 10 })
                 });
                 
+                clearInterval(refreshInterval);
                 const data = await res.json();
                 
                 if (data.success) {
@@ -324,10 +340,10 @@ app.get('/', (req, res) => {
                     isAddingArticles = false;
                 }
             } catch (err) {
-                alert('Error: ' + err.message);
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                isAddingArticles = false;
+                clearInterval(refreshInterval);
+                // Don't show error if it's just a timeout - articles are still being added
+                console.log('Batch add in progress, page will auto-refresh...');
+                // Keep button disabled and keep refreshing
             }
         }
     </script>
@@ -722,6 +738,337 @@ app.get('/articles/:articleId', (req, res) => {
   res.send(html);
 });
 
+// Prompts viewer page
+app.get('/prompts', (req, res) => {
+  const { loadPrompts } = require('./core/promptOptimizer');
+  
+  try {
+    const prompts = loadPrompts();
+    
+    // Get the two main prompts
+    const scenePrompt = prompts['video-scene-description'] || {};
+    const matchPrompt = prompts['video-article-match'] || {};
+    
+    // Sort versions by performance (best first)
+    const sortedSceneVersions = (scenePrompt.versions || [])
+      .filter(v => v.performance && v.performance.avgScore !== undefined)
+      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    
+    const sortedMatchVersions = (matchPrompt.versions || [])
+      .filter(v => v.performance && v.performance.avgScore !== undefined)
+      .sort((a, b) => (b.performance.avgScore || 0) - (a.performance.avgScore || 0));
+    
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Optimization History - Prompt Reels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e7e9ea;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        h1 { font-size: 32px; }
+        .back-link {
+            color: #1d9bf0;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .back-link:hover { text-decoration: underline; }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #2f3336;
+        }
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            background: transparent;
+            border: none;
+            color: #71767b;
+            font-size: 16px;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: #e7e9ea; }
+        .tab.active {
+            color: #1d9bf0;
+            border-bottom-color: #1d9bf0;
+        }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .prompt-card {
+            background: #16181c;
+            border: 1px solid #2f3336;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .prompt-card.best {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
+        }
+        .prompt-card.current {
+            border-color: #1d9bf0;
+        }
+        
+        .badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge.best {
+            background: #10b981;
+            color: white;
+        }
+        .badge.current {
+            background: #1d9bf0;
+            color: white;
+        }
+        
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        .prompt-version {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e7e9ea;
+        }
+        .prompt-score {
+            font-size: 32px;
+            font-weight: bold;
+            color: #10b981;
+        }
+        .prompt-score.low { color: #f59e0b; }
+        .prompt-score.poor { color: #ef4444; }
+        
+        .prompt-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #71767b;
+        }
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .prompt-text {
+            background: #0f1419;
+            border: 1px solid #2f3336;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: #e7e9ea;
+        }
+        
+        .improvement {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-left: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .improvement.positive { color: #10b981; }
+        .improvement.negative { color: #ef4444; }
+        
+        .info-box {
+            background: rgba(29, 155, 240, 0.1);
+            border: 1px solid rgba(29, 155, 240, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            color: #1d9bf0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .info-box p {
+            color: #e7e9ea;
+            line-height: 1.6;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #71767b;
+        }
+        .empty h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Prompt Optimization History</h1>
+            <a href="/" class="back-link">← Back to Dashboard</a>
+        </div>
+        
+        <div class="info-box">
+            <h3>How Prompt Ranking Works</h3>
+            <p><strong>Score = Semantic Similarity</strong> between AI output and ground truth (0-1 scale, shown as 0-100).</p>
+            <p style="margin-top: 10px;">
+                <strong>Scene Description:</strong> We compare AI-generated scene descriptions to article text using cosine similarity of embeddings. Higher scores mean the AI describes scenes more accurately.<br>
+                <strong>Video-Article Match:</strong> We evaluate how well the AI rates video-article relevance. Scores reflect consistency and accuracy of match ratings.
+            </p>
+            <p style="margin-top: 10px;">
+                Prompts are sorted <strong>best to worst</strong> based on average performance across multiple samples. Improvement percentages show gains over the baseline (first version).
+            </p>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('scene')">
+                🎬 Scene Description (${sortedSceneVersions.length} versions)
+            </button>
+            <button class="tab" onclick="switchTab('match')">
+                ⭐ Video-Article Match (${sortedMatchVersions.length} versions)
+            </button>
+        </div>
+        
+        <div id="scene-tab" class="tab-content active">
+            ${sortedSceneVersions.length === 0 ? `
+                <div class="empty">
+                    <h2>No Optimized Prompts Yet</h2>
+                    <p>Process some articles to start FPO optimization.</p>
+                </div>
+            ` : sortedSceneVersions.map((version, index) => {
+                const isBest = index === 0;
+                const isCurrent = version.version === scenePrompt.currentVersion;
+                const score = version.performance.avgScore || 0;
+                const samples = version.performance.samples || 0;
+                const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
+                
+                // Calculate improvement from baseline
+                const baseline = sortedSceneVersions[sortedSceneVersions.length - 1];
+                const improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
+                const improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+                const improvementClass = improvement > 0 ? 'positive' : 'negative';
+                
+                return `
+                <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''}">
+                    ${isBest ? '<span class="badge best">🏆 BEST</span>' : ''}
+                    ${isCurrent && !isBest ? '<span class="badge current">CURRENT</span>' : ''}
+                    
+                    <div class="prompt-header">
+                        <div>
+                            <div class="prompt-version">Version ${version.version}</div>
+                            ${improvement !== 0 ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
+                        </div>
+                        <div class="prompt-score ${scoreClass}">${(score * 100).toFixed(1)}</div>
+                    </div>
+                    
+                    <div class="prompt-stats">
+                        <div class="stat">📊 ${samples} samples</div>
+                        <div class="stat">📅 ${new Date(version.createdAt).toLocaleString()}</div>
+                        <div class="stat">Rank: #${index + 1}</div>
+                    </div>
+                    
+                    <div class="prompt-text">${version.template}</div>
+                </div>
+                `;
+            }).join('')}
+        </div>
+        
+        <div id="match-tab" class="tab-content">
+            ${sortedMatchVersions.length === 0 ? `
+                <div class="empty">
+                    <h2>No Optimized Prompts Yet</h2>
+                    <p>Process and rate some articles to start FPO optimization.</p>
+                </div>
+            ` : sortedMatchVersions.map((version, index) => {
+                const isBest = index === 0;
+                const isCurrent = version.version === matchPrompt.currentVersion;
+                const score = version.performance.avgScore || 0;
+                const samples = version.performance.samples || 0;
+                const scoreClass = score >= 0.8 ? '' : score >= 0.6 ? 'low' : 'poor';
+                
+                // Calculate improvement from baseline
+                const baseline = sortedMatchVersions[sortedMatchVersions.length - 1];
+                const improvement = baseline ? ((score - baseline.performance.avgScore) / baseline.performance.avgScore * 100) : 0;
+                const improvementText = improvement > 0 ? `+${improvement.toFixed(1)}%` : `${improvement.toFixed(1)}%`;
+                const improvementClass = improvement > 0 ? 'positive' : 'negative';
+                
+                return `
+                <div class="prompt-card ${isBest ? 'best' : ''} ${isCurrent ? 'current' : ''}">
+                    ${isBest ? '<span class="badge best">🏆 BEST</span>' : ''}
+                    ${isCurrent && !isBest ? '<span class="badge current">CURRENT</span>' : ''}
+                    
+                    <div class="prompt-header">
+                        <div>
+                            <div class="prompt-version">Version ${version.version}</div>
+                            ${improvement !== 0 ? `<span class="improvement ${improvementClass}">${improvementText} from baseline</span>` : ''}
+                        </div>
+                        <div class="prompt-score ${scoreClass}">${(score * 100).toFixed(1)}</div>
+                    </div>
+                    
+                    <div class="prompt-stats">
+                        <div class="stat">📊 ${samples} samples</div>
+                        <div class="stat">📅 ${new Date(version.createdAt).toLocaleString()}</div>
+                        <div class="stat">Rank: #${index + 1}</div>
+                    </div>
+                    
+                    <div class="prompt-text">${version.template}</div>
+                </div>
+                `;
+            }).join('')}
+        </div>
+    </div>
+    
+    <script>
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+        }
+    </script>
+</body>
+</html>
+    `;
+    
+    res.send(html);
+  } catch (error) {
+    res.status(500).send(`<h1>Error loading prompts</h1><p>${error.message}</p>`);
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   const { log } = require('./utils/logger');
@@ -733,13 +1080,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
-});
-
-// Initialize Weave and start server
-let server;
 
 const startServer = async () => {
   const { log } = require('./utils/logger');
