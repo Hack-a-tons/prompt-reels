@@ -192,6 +192,45 @@ GET /api/results/:videoId
 Response: Analysis results JSON
 ```
 
+### Detect Scenes
+```bash
+POST /api/detect-scenes
+Content-Type: application/json
+Body: { 
+  videoId,              // Required: Video ID from upload
+  threshold: 0.4,       // Optional: Scene change sensitivity (0.0-1.0)
+  extractFrames: false  // Optional: Extract 3 frames per scene
+}
+Response: { 
+  success, 
+  videoId, 
+  sceneCount, 
+  scenes: [
+    {
+      sceneId, 
+      start,      // Start time in seconds
+      end,        // End time in seconds
+      duration,   // Scene duration
+      frames: []  // If extractFrames=true
+    }
+  ],
+  outputPath 
+}
+
+# Use the script
+./scripts/detect-scenes.sh video-1234567890           # Basic
+./scripts/detect-scenes.sh -f video-1234567890        # With frames
+./scripts/detect-scenes.sh -t 0.3 video-1234567890    # Custom threshold
+```
+
+**How it works:**
+- Uses ffmpeg's scene detection filter (no file splitting needed!)
+- Analyzes frame differences to detect cuts and transitions
+- Lower threshold (0.2-0.3): More sensitive, detects subtle changes
+- Higher threshold (0.5-0.6): Less sensitive, only major scene changes
+- Default (0.4): Good balance for most videos
+- Optionally extracts 3 frames per scene (beginning/middle/end)
+
 ### FPO (Federated Prompt Optimization) with Evolution 🧬
 
 Complete guide to the self-improving prompt system.

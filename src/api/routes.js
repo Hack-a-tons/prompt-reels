@@ -7,6 +7,7 @@ const { processVideo } = require('../core/videoProcessor');
 const { describeImage } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
+const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
 
 const router = express.Router();
 
@@ -151,6 +152,67 @@ router.post('/analyze', async (req, res) => {
     });
   } catch (error) {
     console.error('Analysis error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/detect-scenes
+ * Detect scenes in a video and optionally extract frames
+ */
+router.post('/detect-scenes', async (req, res) => {
+  try {
+    const { videoId, threshold = 0.4, extractFrames = false } = req.body;
+    
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    // Find video file
+    const videoFiles = fs.readdirSync(config.uploadDir)
+      .filter(f => f.startsWith(videoId));
+    
+    if (videoFiles.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const videoPath = path.join(config.uploadDir, videoFiles[0]);
+    
+    // Detect scenes
+    console.log(`\n🎬 Scene detection for: ${videoId}`);
+    let scenes = await detectScenes(videoPath, threshold);
+    
+    // Optionally extract frames
+    if (extractFrames) {
+      const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
+      scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+    }
+
+    // Save scene data
+    const scenesPath = path.join(config.outputDir, `${videoId}_scenes.json`);
+    const sceneData = {
+      videoId,
+      videoPath,
+      threshold,
+      sceneCount: scenes.length,
+      scenes,
+      timestamp: new Date().toISOString(),
+    };
+    
+    fs.writeFileSync(scenesPath, JSON.stringify(sceneData, null, 2));
+
+    console.log(`✓ Scene detection complete: ${scenes.length} scenes detected`);
+    console.log(`✓ Saved to: ${scenesPath}\n`);
+
+    res.json({
+      success: true,
+      videoId,
+      sceneCount: scenes.length,
+      scenes,
+      outputPath: scenesPath,
+    });
+  } catch (error) {
+    console.error('Scene detection error:', error);
     res.status(500).json({ error: error.message });
   }
 });

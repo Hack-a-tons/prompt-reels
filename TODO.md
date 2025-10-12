@@ -14,10 +14,12 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 - [x] Install dependencies: `express`, `ffmpeg-static`, `@google/generative-ai`, `cosine-similarity`.
 - [x] Setup folder structure (`src/api`, `src/core`, `data`, `output`).
 - [x] Created Weave logging system (file-based).
+- [x] Integrated W&B Weave SDK with cloud logging.
 - [x] Created `test.sh` script with `-v` and `-p` flags.
 - [x] Created `Dockerfile` and `compose.yml` for production.
 - [x] Server running on port 15000 with health check.
 - [x] Basic API endpoints: upload, analyze, prompts, FPO.
+- [x] Deployed to production (reels.hurated.com).
 
 ### Phase 2 — Core API Server
 - [ ] Test video upload endpoint with `multer` (already implemented).
@@ -28,12 +30,15 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 - [ ] Find 3-5 short test videos (Pexels, Pixabay, Reuters) for different domains.
 - [ ] Create `data/reference.json` with ground-truth descriptions for evaluation.
 
-### Phase 3 — Prompt Optimization Loop (FPO)
-- [ ] Create 3–5 prompt templates (`data/prompts.json`).
-- [ ] Simulate 3 domains (news, sports, reels) as federated clients.
-- [ ] Evaluate prompt performance with Gemini and embedding similarity.
-- [ ] Aggregate results → update prompt weights.
-- [ ] Log improvements and trends in Weave dashboard.
+### Phase 3 — Prompt Optimization Loop (FPO) ✅
+- [x] Create 3–5 prompt templates (`data/prompts.json`).
+- [x] Simulate 3 domains (news, sports, reels) as federated clients.
+- [x] Evaluate prompt performance with Gemini and embedding similarity.
+- [x] Aggregate results → update prompt weights.
+- [x] Log improvements and trends in Weave dashboard.
+- [x] Implement genetic crossover for prompt evolution.
+- [x] Track generation numbers and parent lineage.
+- [x] Create evolve.sh management script.
 
 ### Phase 4 — Optional Integrations
 - [ ] **Tavily** → fetch article text for reference descriptions.
@@ -59,10 +64,13 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
 ## Next Steps - FPO Improvements
 
 ### High Priority
-- [ ] **Scene-based frame extraction**
-  - Detect scene changes using ffmpeg
-  - Extract 3 frames per scene (beginning, middle, end)
-  - Analyze frames together for better context
+- [ ] **Scene-based frame extraction** ← IN PROGRESS
+  - [ ] Detect scene changes using ffmpeg (scene filter)
+  - [ ] Return JSON with scene timestamps (start, end)
+  - [ ] Extract 3 frames per scene (beginning, middle, end)
+  - [ ] Analyze 3 frames together for better context
+  - [ ] API endpoint: POST /api/detect-scenes
+  - [ ] Bash script: scripts/detect-scenes.sh
   - **Impact**: Significantly improves data quality and scoring accuracy
 
 - [ ] **Multiple test videos per domain**
@@ -78,10 +86,10 @@ Create a self-improving video analysis pipeline that splits videos into scenes, 
   - **Impact**: Easy to see current best prompt and trends
 
 ### Medium Priority
-- [ ] **Real W&B Weave integration**
-  - Install `@wandb/weave` SDK
-  - Replace file-based logging with cloud API
-  - View experiments at https://wandb.ai
+- [x] **Real W&B Weave integration** ✅
+  - Installed `@wandb/sdk`
+  - Implemented cloud logging with file fallback
+  - View experiments at https://wandb.ai/prompt-reels
   - **Impact**: Better visualization and collaboration
 
 - [ ] **Analysis script for local logs**
