@@ -23,7 +23,7 @@ const initClients = () => {
     });
   }
   
-  console.log(`AI Provider: ${currentProvider}`);
+  // Don't log here - weave.js will log AI provider during initialization
 };
 
 /**
@@ -246,7 +246,8 @@ const setProvider = (provider) => {
     throw new Error('Provider must be "azure" or "gemini"');
   }
   currentProvider = provider;
-  console.log(`AI Provider: ${currentProvider}`);
+  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  console.log(`✓  ${timestamp} AI Provider switched to: ${currentProvider}`);
 };
 
 // Initialize on module load

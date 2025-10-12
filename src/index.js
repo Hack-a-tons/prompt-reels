@@ -72,7 +72,7 @@ const startServer = async () => {
       log.info(`Environment: ${config.nodeEnv}`);
       log.info(`Using Gemini model: ${config.geminiModel}`);
       log.info(`Weave project: ${config.wandbProject}`);
-      console.log(`\nHealth check: http://localhost:${config.port}/health`);
+      log.info(`Health check: http://localhost:${config.port}/health`);
     });
   } catch (error) {
     const { log } = require('./utils/logger');
