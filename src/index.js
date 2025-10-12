@@ -1068,9 +1068,19 @@ app.get('/prompts', (req, res) => {
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🧠 Prompt Optimization History</h1>
-            <a href="/" class="back-link">← Back to Dashboard</a>
+        <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>🧠 Prompt Optimization History</h1>
+                <a href="/" class="back-link" style="position: static; margin-top: 10px; display: inline-block;">← Back to Dashboard</a>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <button id="runFpoBtn" class="add-articles-btn" onclick="runFPO()" style="background: #7c3aed;">
+                    🚀 Run FPO Iteration
+                </button>
+                <span id="fpoStatus" style="display: none; color: #71767b; font-size: 14px;">
+                    <span class="spinner" style="width: 14px; height: 14px;"></span> Running FPO...
+                </span>
+            </div>
         </div>
         
         <div class="info-box">
@@ -1198,6 +1208,40 @@ app.get('/prompts', (req, res) => {
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.getElementById(tab + '-tab').classList.add('active');
+        }
+        
+        async function runFPO() {
+            if (!confirm('Run FPO iteration? This will evaluate all prompts on available test data.')) return;
+            
+            const btn = document.getElementById('runFpoBtn');
+            const status = document.getElementById('fpoStatus');
+            
+            // Hide button immediately
+            btn.style.display = 'none';
+            status.style.display = 'flex';
+            
+            try {
+                const res = await fetch('/api/fpo/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ iterations: 1 })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert(\`FPO Complete!\\n\\nIterations: \${data.iterations}\\nFinal Prompt: \${data.finalPrompt}\\nEvolved: \${data.evolved} new prompts\`);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                    btn.style.display = 'inline-block';
+                    status.style.display = 'none';
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+                btn.style.display = 'inline-block';
+                status.style.display = 'none';
+            }
         }
     </script>
 </body>

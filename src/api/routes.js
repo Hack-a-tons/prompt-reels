@@ -1345,6 +1345,50 @@ EXPLANATION: [text]`;
       ratedAt: new Date().toISOString(),
     });
     
+    // Trigger FPO evaluation with actual article data
+    try {
+      console.log(`\n🎯 Triggering FPO evaluation with article ${articleId}...`);
+      const { evaluatePrompt } = require('../core/promptOptimizer');
+      const prompts = loadPrompts();
+      
+      // Use first scene frame and article text for evaluation
+      if (articleDetails.sceneData && articleDetails.sceneData.scenes.length > 0) {
+        const firstFrame = articleDetails.sceneData.scenes[0]?.frames[0];
+        const articleText = articleDetails.text || articleDetails.description;
+        
+        if (firstFrame && articleText) {
+          // Evaluate all prompts on this article
+          for (const template of prompts.templates) {
+            const result = await evaluatePrompt(
+              template.template,
+              firstFrame.path,
+              articleText.substring(0, 500) // Use first 500 chars as reference
+            );
+            
+            // Update template performance
+            if (!template.performance) {
+              template.performance = [];
+            }
+            template.performance.push({
+              score: result.score,
+              timestamp: new Date().toISOString(),
+              articleId,
+            });
+            
+            console.log(`   ${template.id}: score=${result.score.toFixed(4)}`);
+          }
+          
+          // Save updated prompts
+          const { savePrompts } = require('../core/promptOptimizer');
+          savePrompts(prompts);
+          console.log(`✓ FPO evaluation complete, prompts updated!\n`);
+        }
+      }
+    } catch (fpoError) {
+      // Don't fail the rating if FPO fails
+      console.error('FPO evaluation error (non-fatal):', fpoError.message);
+    }
+    
     // Clear flag
     clearFlag(flagName);
     
