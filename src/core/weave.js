@@ -1,9 +1,10 @@
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
-const weave = require('weave');
+const wandb = require('@wandb/sdk');
 
 let weaveClient = null;
+let wandbRun = null;
 let logFile = null;
 let useCloudWeave = false;
 
@@ -13,13 +14,22 @@ let useCloudWeave = false;
  */
 const initWeave = async () => {
   try {
-    // Try to initialize W&B Weave cloud
+    // Try to initialize W&B cloud
     if (config.wandbApiKey) {
       try {
-        await weave.init(config.wandbProject);
+        await wandb.init({
+          apiKey: config.wandbApiKey,
+          project: config.wandbProject,
+          config: {
+            aiProvider: config.aiProvider,
+            model: config.geminiModel,
+            azureDeployment: config.azureOpenAI.deploymentName,
+          },
+        });
+        wandbRun = wandb;
         useCloudWeave = true;
         weaveClient = { initialized: true, cloud: true };
-        console.log(`✓ Weave cloud initialized for project: ${config.wandbProject}`);
+        console.log(`✓ W&B initialized for project: ${config.wandbProject}`);
         console.log(`✓ View at: https://wandb.ai/${config.wandbProject}`);
         return weaveClient;
       } catch (cloudError) {
@@ -72,16 +82,15 @@ const logPromptEvaluation = async (data) => {
   }
 
   try {
-    if (useCloudWeave) {
+    if (useCloudWeave && wandbRun) {
       // Log to W&B cloud
-      await weave.log({
-        type: 'prompt_evaluation',
-        domain: data.domain,
-        promptId: data.promptId,
-        score: data.score,
-        latency: data.latency,
-        description: data.description,
-        timestamp: new Date().toISOString(),
+      await wandbRun.log({
+        prompt_evaluation: {
+          domain: data.domain,
+          promptId: data.promptId,
+          score: data.score,
+          latency: data.latency,
+        },
       });
     } else {
       // Log to file
@@ -108,14 +117,15 @@ const logFPOIteration = async (data) => {
   }
 
   try {
-    if (useCloudWeave) {
+    if (useCloudWeave && wandbRun) {
       // Log to W&B cloud
-      await weave.log({
-        type: 'fpo_iteration',
-        iteration: data.iteration,
-        globalPrompt: data.globalPrompt,
-        prompts: data.prompts,
-        timestamp: new Date().toISOString(),
+      await wandbRun.log({
+        fpo_iteration: data.iteration,
+        global_prompt: data.globalPrompt,
+        prompt_weights: data.prompts.reduce((acc, p) => {
+          acc[p.id] = p.weight;
+          return acc;
+        }, {}),
       });
     } else {
       // Log to file
@@ -142,14 +152,14 @@ const logVideoAnalysis = async (data) => {
   }
 
   try {
-    if (useCloudWeave) {
+    if (useCloudWeave && wandbRun) {
       // Log to W&B cloud
-      await weave.log({
-        type: 'video_analysis',
-        videoId: data.videoId,
-        frameCount: data.frameCount,
-        duration: data.duration,
-        timestamp: new Date().toISOString(),
+      await wandbRun.log({
+        video_analysis: {
+          videoId: data.videoId,
+          frameCount: data.frameCount,
+          duration: data.duration,
+        },
       });
     } else {
       // Log to file
