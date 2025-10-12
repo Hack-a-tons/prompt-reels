@@ -420,7 +420,8 @@ router.get('/scenes/:videoId', (req, res) => {
     }
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
-    const videoPath = sceneData.videoPath || `uploads/articles/${videoId}.mp4`;
+    // Use streaming endpoint for local videos (supports range requests)
+    const videoPath = `api/articles/${videoId}.mp4`;
     
     // Helper function for time formatting
     const formatTime = (seconds) => {
@@ -651,7 +652,7 @@ router.get('/scenes/:videoId', (req, res) => {
   <div class="container">
     <div class="video-player">
       <h2>📹 Video Playback</h2>
-      <video id="videoPlayer" controls autoplay muted>
+      <video id="videoPlayer" controls autoplay muted preload="metadata">
         <source src="/${videoPath}" type="video/mp4">
         Your browser does not support the video tag.
       </video>
@@ -1419,6 +1420,68 @@ router.get('/flags/status', (req, res) => {
     batchAdding: hasFlag('batch-adding'),
     batchAddingData: getFlag('batch-adding'),
   });
+});
+
+/**
+ * GET /api/queue/status
+ * Get status of all processing queues
+ */
+router.get('/queue/status', (req, res) => {
+  try {
+    const { getStatus } = require('../utils/queue');
+    const status = getStatus('all');
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/articles/:articleId.mp4
+ * Stream video with range request support (for fast loading)
+ */
+router.get('/articles/:articleId.mp4', (req, res) => {
+  try {
+    const { articleId } = req.params;
+    const videoPath = path.join(config.uploadDir, 'articles', `${articleId}.mp4`);
+    
+    if (!fs.existsSync(videoPath)) {
+      return res.status(404).send('Video not found');
+    }
+    
+    const stat = fs.statSync(videoPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    
+    if (range) {
+      // Parse Range header
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(videoPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'video/mp4',
+      };
+      
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // No range, send full file
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'video/mp4',
+        'Accept-Ranges': 'bytes',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(videoPath).pipe(res);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

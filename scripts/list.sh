@@ -178,30 +178,34 @@ echo ""
 
 # List files via SSH for prod, locally for dev
 if [ "$ENVIRONMENT" = "prod" ]; then
-    # SSH to server and list files
-    FILES=$(ssh reels.hurated.com "ls -lh prompt-reels/uploads/video-*.* 2>/dev/null" 2>/dev/null)
+    # SSH to server and list files (now in articles/ subdirectory)
+    FILES=$(ssh reels.hurated.com "ls -lh prompt-reels/uploads/articles/article-*.mp4 2>/dev/null" 2>/dev/null)
     
     if [ -z "$FILES" ]; then
         echo -e "${BLUE}No videos found${NC}"
+        echo ""
+        echo -e "${GRAY}# Videos are now stored in uploads/articles/${NC}"
+        echo -e "${GRAY}# Fetch articles to populate:${NC}"
+        echo -e "${GRAY}./scripts/fetch-news.sh${NC}"
         exit 0
     fi
     
-    echo -e "${BLUE}Location: reels.hurated.com:~/prompt-reels/uploads/${NC}"
+    echo -e "${BLUE}Location: reels.hurated.com:~/prompt-reels/uploads/articles/${NC}"
 else
     # List local files
-    if [ ! -d "uploads" ]; then
-        echo -e "${BLUE}No uploads directory${NC}"
+    if [ ! -d "uploads/articles" ]; then
+        echo -e "${BLUE}No uploads/articles directory${NC}"
         exit 0
     fi
     
-    FILES=$(ls -lh uploads/video-*.* 2>/dev/null)
+    FILES=$(ls -lh uploads/articles/article-*.mp4 2>/dev/null)
     
     if [ -z "$FILES" ]; then
         echo -e "${BLUE}No videos found${NC}"
         exit 0
     fi
     
-    echo -e "${BLUE}Location: $(pwd)/uploads/${NC}"
+    echo -e "${BLUE}Location: $(pwd)/uploads/articles/${NC}"
 fi
 
 echo ""

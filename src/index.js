@@ -262,8 +262,8 @@ app.get('/', (req, res) => {
                     // Get video player for preview
                     let videoHtml = '<div class="no-video">No video</div>';
                     if (article.hasLocalVideo) {
-                        const videoPath = `/uploads/articles/${article.articleId}.mp4`;
-                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${videoPath}" type="video/mp4"></video>`;
+                        const videoPath = `/api/articles/${article.articleId}.mp4`;
+                        videoHtml = `<video class="video-preview" autoplay muted loop playsinline preload="metadata"><source src="${videoPath}" type="video/mp4"></video>`;
                     }
                     
                     // Score coloring: high (>70) = green, medium (40-70) = yellow, low (<40) = red
@@ -443,8 +443,9 @@ app.get('/articles/:articleId', (req, res) => {
     return res.status(404).send('<h1>Article not found</h1>');
   }
   
+  // Use streaming endpoint for local videos (supports range requests)
   const videoUrl = article.video.localPath 
-    ? `/${article.video.localPath}`
+    ? `/api/articles/${articleId}.mp4`
     : article.video.url;
   
   const hasLocalVideo = !!article.video.localPath;
@@ -671,7 +672,7 @@ app.get('/articles/:articleId', (req, res) => {
         
         ${hasLocalVideo ? `
         <div class="video-container">
-            <video controls autoplay muted playsinline>
+            <video controls autoplay muted playsinline preload="metadata">
                 <source src="${videoUrl}" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
