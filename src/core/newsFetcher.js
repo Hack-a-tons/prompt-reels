@@ -399,9 +399,10 @@ const downloadVideo = async (videoUrl, articleId) => {
  * Fetch news article with video - complete workflow with exponential retry
  * @param {string} query - Search query
  * @param {number} initialMaxResults - Initial number of results to try (default: 3)
+ * @param {boolean} useRSSFallback - Use RSS feeds if Tavily fails (default: true)
  * @returns {Promise<Object>} Article with video and metadata
  */
-const fetchNewsArticle = async (query = 'latest news video', initialMaxResults = 3) => {
+const fetchNewsArticle = async (query = 'latest news video', initialMaxResults = 3, useRSSFallback = true) => {
   log.info(`Fetching news articles for: "${query}"`);
   
   // Load existing articles to avoid duplicates
@@ -410,140 +411,156 @@ const fetchNewsArticle = async (query = 'latest news video', initialMaxResults =
   const existingUrls = new Set(existingArticles.map(a => a.source?.url).filter(Boolean));
   log.info(`Found ${existingUrls.size} existing articles in database`);
   
-  // Exponential backoff: try 3, 6, 12, 24, 48, 96 articles
-  const retryLimits = [3, 6, 12, 24, 48, 96];
+  let articles = [];
+  let usedRSS = false;
+  
+  // Try Tavily first
+  try {
+    // Exponential backoff: try 3, 6, 12, 24, 48, 96 articles
+    const retryLimits = [3, 6, 12, 24, 48, 96];
+    
+    for (const maxResults of retryLimits) {
+      log.info(`Trying Tavily with ${maxResults} articles...`);
+      
+      // Step 1: Fetch articles with Tavily
+      const tavilyArticles = await fetchNewsWithTavily(query, maxResults);
+      articles = tavilyArticles;
+      
+      if (articles.length > 0) {
+        log.info(`Tavily returned ${articles.length} articles`);
+        break;
+      }
+    }
+  } catch (error) {
+    log.warn(`Tavily failed: ${error.message}`);
+    
+    if (useRSSFallback) {
+      log.info('⚡ Falling back to RSS feeds (free, no API needed)...');
+      const { fetchFromRSSFeeds } = require('./rssFetcher');
+      articles = await fetchFromRSSFeeds(50); // Get more articles from RSS
+      usedRSS = true;
+      log.info(`RSS feeds returned ${articles.length} articles`);
+    } else {
+      throw error;
+    }
+  }
+  
+  if (articles.length === 0) {
+    throw new Error('No articles found from any source');
+  }
+  
+  // Step 2: Try to extract video from articles
   let totalChecked = 0;
   const checkedUrls = new Set(); // Track URLs we've already checked
   
-  for (const maxResults of retryLimits) {
-    log.info(`Trying Tavily with ${maxResults} articles...`);
+  for (let i = 0; i < articles.length; i++) {
+    const article = articles[i];
     
-    // Step 1: Fetch articles with Tavily
-    const articles = await fetchNewsWithTavily(query, maxResults);
-    log.info(`Tavily returned ${articles.length} articles`);
-
-    if (articles.length === 0) {
-      log.warn('No articles found from Tavily API');
+    // Skip if article already exists in database
+    if (existingUrls.has(article.url)) {
+      log.info(`Skipping duplicate article: ${article.title.substring(0, 50)}...`);
+      log.debug(`  URL already in database: ${article.url}`);
       continue;
     }
-
-    // Step 2: Try to extract video from articles
-    let newArticlesInBatch = 0;
-    for (let i = 0; i < articles.length; i++) {
-      const article = articles[i];
-      
-      // Skip if article already exists in database
-      if (existingUrls.has(article.url)) {
-        log.info(`Skipping duplicate article: ${article.title.substring(0, 50)}...`);
-        log.debug(`  URL already in database: ${article.url}`);
-        continue;
-      }
-      
-      // Skip if we've already checked this URL in this session
-      if (checkedUrls.has(article.url)) {
-        log.debug(`Skipping already checked: ${article.url}`);
-        continue;
-      }
-      
-      checkedUrls.add(article.url);
-      totalChecked++;
-      newArticlesInBatch++;
-      log.info(`Checking article ${totalChecked} (${newArticlesInBatch} new in batch): ${article.title.substring(0, 50)}...`);
-      log.debug(`URL: ${article.url}`);
-
-      try {
-        const videoData = await extractVideoWithBrowserBase(article.url);
-        
-        if (videoData && videoData.url) {
-          log.info(`Found video: ${videoData.url.substring(0, 60)}...`);
-          
-          // Generate article ID
-          const articleId = `article-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-          
-          // Download video
-          log.info('Downloading video...');
-          let videoPath = null;
-          
-          if (videoData.type === 'video') {
-            try {
-              videoPath = await downloadVideo(videoData.url, articleId);
-              log.info(`Video downloaded: ${videoPath}`);
-              
-              // Generate thumbnail after video download
-              const { generateThumbnail } = require('../utils/thumbnailGenerator');
-              await generateThumbnail(articleId);
-            } catch (error) {
-              log.warn(`Could not download video: ${error.message}`);
-            }
-          }
-
-          // Prepare article data
-          const articleData = {
-            articleId,
-            source: {
-              url: article.url,
-              domain: new URL(article.url).hostname,
-            },
-            video: {
-              url: videoData.url,
-              type: videoData.type,
-              platform: videoData.platform || 'direct',
-              localPath: videoPath,
-              poster: videoData.poster || null,
-            },
-            title: article.title,
-            description: cleanArticleText(article.content || ''),
-            text: cleanArticleText(article.raw_content || article.content || ''),
-            score: article.score || 0,
-            published: article.published_date || null,
-            fetchedAt: new Date().toISOString(),
-            images: article.images || [],
-            workflow: {
-              status: ArticleStatus.FETCHED,
-              updatedAt: new Date().toISOString(),
-            },
-            statusHistory: [{
-              status: ArticleStatus.FETCHED,
-              timestamp: new Date().toISOString(),
-            }],
-          };
-
-          // Save article metadata
-          const articlesDir = path.join(config.outputDir, 'articles');
-          if (!fs.existsSync(articlesDir)) {
-            fs.mkdirSync(articlesDir, { recursive: true });
-          }
-          
-          const metadataPath = path.join(articlesDir, `${articleId}.json`);
-          fs.writeFileSync(metadataPath, JSON.stringify(articleData, null, 2));
-          log.info(`Metadata saved: ${metadataPath}`);
-          log.info(`✓ Success! Found video after checking ${totalChecked} articles`);
-
-          return articleData;
-        } else {
-          log.warn('No video found in article');
-          log.debug(`  Checked video tags, iframes, JSON-LD, and meta tags`);
-        }
-      } catch (error) {
-        log.error(`Error processing article: ${error.message}`);
-        log.error(`  Article: ${article.title.substring(0, 60)}...`);
-        log.error(`  URL: ${article.url}`);
-        log.error(`  Error type: ${error.name}`);
-        
-        // Show stack trace for unexpected errors
-        if (error.stack && !error.message.includes('BrowserBase')) {
-          const stackLines = error.stack.split('\n').slice(0, 3);
-          stackLines.forEach(line => log.error(`  ${line.trim()}`));
-        }
-      }
+    
+    // Skip if we've already checked this URL in this session
+    if (checkedUrls.has(article.url)) {
+      log.debug(`Skipping already checked: ${article.url}`);
+      continue;
     }
     
-    // If we didn't find a video in this batch, try next batch size
-    const skipped = articles.length - newArticlesInBatch;
-    if (skipped > 0) {
-      log.info(`Skipped ${skipped} duplicate articles from previous batches`);
+    checkedUrls.add(article.url);
+    totalChecked++;
+    log.info(`Checking article ${totalChecked}: ${article.title.substring(0, 50)}...`);
+    log.debug(`URL: ${article.url}`);
+
+    try {
+      const videoData = await extractVideoWithBrowserBase(article.url);
+      
+      if (videoData && videoData.url) {
+        log.info(`Found video: ${videoData.url.substring(0, 60)}...`);
+        
+        // Generate article ID
+        const articleId = `article-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        
+        // Download video
+        log.info('Downloading video...');
+        let videoPath = null;
+        
+        if (videoData.type === 'video') {
+          try {
+            videoPath = await downloadVideo(videoData.url, articleId);
+            log.info(`Video downloaded: ${videoPath}`);
+            
+            // Generate thumbnail after video download
+            const { generateThumbnail } = require('../utils/thumbnailGenerator');
+            await generateThumbnail(articleId);
+          } catch (error) {
+            log.warn(`Could not download video: ${error.message}`);
+          }
+        }
+
+        // Prepare article data
+        const articleData = {
+          articleId,
+          source: {
+            url: article.url,
+            domain: new URL(article.url).hostname,
+          },
+          video: {
+            url: videoData.url,
+            type: videoData.type,
+            platform: videoData.platform || 'direct',
+            localPath: videoPath,
+            poster: videoData.poster || null,
+          },
+          title: article.title,
+          description: cleanArticleText(article.content || ''),
+          text: cleanArticleText(article.raw_content || article.content || ''),
+          score: article.score || 0,
+          published: article.published_date || null,
+          fetchedAt: new Date().toISOString(),
+          images: article.images || [],
+          workflow: {
+            status: ArticleStatus.FETCHED,
+            updatedAt: new Date().toISOString(),
+          },
+          statusHistory: [{
+            status: ArticleStatus.FETCHED,
+            timestamp: new Date().toISOString(),
+          }],
+        };
+
+        // Save article metadata
+        const articlesDir = path.join(config.outputDir, 'articles');
+        if (!fs.existsSync(articlesDir)) {
+          fs.mkdirSync(articlesDir, { recursive: true });
+        }
+        
+        const metadataPath = path.join(articlesDir, `${articleId}.json`);
+        fs.writeFileSync(metadataPath, JSON.stringify(articleData, null, 2));
+        log.info(`Metadata saved: ${metadataPath}`);
+        
+        const source = usedRSS ? 'RSS feeds' : 'Tavily';
+        log.info(`✓ Success! Found video after checking ${totalChecked} articles (source: ${source})`);
+
+        return articleData;
+      } else {
+        log.warn('No video found in article');
+        log.debug(`  Checked video tags, iframes, JSON-LD, and meta tags`);
+      }
+    } catch (error) {
+      log.error(`Error processing article: ${error.message}`);
+      log.error(`  Article: ${article.title.substring(0, 60)}...`);
+      log.error(`  URL: ${article.url}`);
+      log.error(`  Error type: ${error.name}`);
+      
+      // Show stack trace for unexpected errors
+      if (error.stack && !error.message.includes('BrowserBase')) {
+        const stackLines = error.stack.split('\n').slice(0, 3);
+        stackLines.forEach(line => log.error(`  ${line.trim()}`));
+      }
     }
-    log.warn(`No videos found in ${newArticlesInBatch} new articles, trying larger batch...`);
   }
 
   throw new Error(`No articles with downloadable videos found after checking ${totalChecked} unique articles`);

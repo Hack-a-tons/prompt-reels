@@ -780,13 +780,14 @@ router.get('/scenes/:videoId/json', (req, res) => {
 
 /**
  * POST /api/fetch-news
- * Fetch news article with video using Tavily and BrowserBase
+ * Fetch news article with video using Tavily/RSS and BrowserBase
  */
 router.post('/fetch-news', async (req, res) => {
   try {
     const { query = 'latest news video' } = req.body;
     
     // Uses exponential backoff internally: 3, 6, 12, 24, 48, 96 articles
+    // Automatically falls back to RSS feeds if Tavily fails
     const articleData = await fetchNewsArticle(query);
     
     res.json({
@@ -797,6 +798,121 @@ router.post('/fetch-news', async (req, res) => {
     res.status(500).json({ 
       error: error.message,
       details: 'Failed to fetch news article with video'
+    });
+  }
+});
+
+/**
+ * POST /api/fetch-from-url
+ * Fetch article from a specific URL (manual input, bypasses Tavily)
+ */
+router.post('/fetch-from-url', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+    
+    // Validate URL format
+    try {
+      new URL(url);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+    
+    log.info(`Fetching article from manual URL: ${url}`);
+    
+    // Extract video using BrowserBase
+    const { extractVideoWithBrowserBase, downloadVideo } = require('../core/newsFetcher');
+    const { fetchArticleByURL } = require('../core/rssFetcher');
+    const { ArticleStatus } = require('../core/articleWorkflow');
+    
+    // Get basic article info
+    const articleInfo = await fetchArticleByURL(url);
+    
+    // Extract video
+    const videoData = await extractVideoWithBrowserBase(url);
+    
+    if (!videoData || !videoData.url) {
+      return res.status(404).json({ 
+        error: 'No video found on this page',
+        details: 'Checked video tags, iframes, JSON-LD, and meta tags'
+      });
+    }
+    
+    log.info(`Found video: ${videoData.url.substring(0, 60)}...`);
+    
+    // Generate article ID
+    const articleId = `article-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    
+    // Download video
+    let videoPath = null;
+    if (videoData.type === 'video') {
+      try {
+        videoPath = await downloadVideo(videoData.url, articleId);
+        log.info(`Video downloaded: ${videoPath}`);
+        
+        // Generate thumbnail
+        const { generateThumbnail } = require('../utils/thumbnailGenerator');
+        await generateThumbnail(articleId);
+      } catch (error) {
+        log.warn(`Could not download video: ${error.message}`);
+      }
+    }
+    
+    // Prepare article data
+    const articleData = {
+      articleId,
+      source: {
+        url: url,
+        domain: new URL(url).hostname,
+      },
+      video: {
+        url: videoData.url,
+        type: videoData.type,
+        platform: videoData.platform || 'direct',
+        localPath: videoPath,
+        poster: videoData.poster || null,
+      },
+      title: articleInfo.title,
+      description: articleInfo.content || '',
+      text: articleInfo.raw_content || articleInfo.content || '',
+      score: 0.9, // Manual URLs are high priority
+      published: null,
+      fetchedAt: new Date().toISOString(),
+      images: [],
+      workflow: {
+        status: ArticleStatus.FETCHED,
+        updatedAt: new Date().toISOString(),
+      },
+      statusHistory: [{
+        status: ArticleStatus.FETCHED,
+        timestamp: new Date().toISOString(),
+      }],
+    };
+    
+    // Save article metadata
+    const articlesDir = path.join(config.outputDir, 'articles');
+    if (!fs.existsSync(articlesDir)) {
+      fs.mkdirSync(articlesDir, { recursive: true });
+    }
+    
+    const metadataPath = path.join(articlesDir, `${articleId}.json`);
+    fs.writeFileSync(metadataPath, JSON.stringify(articleData, null, 2));
+    log.info(`Metadata saved: ${metadataPath}`);
+    log.info(`✓ Success! Article fetched from manual URL`);
+    
+    res.json({
+      success: true,
+      article: articleData,
+      message: 'Article fetched successfully from provided URL',
+    });
+  } catch (error) {
+    log.error(`Error fetching from URL: ${error.message}`);
+    res.status(500).json({ 
+      error: error.message,
+      details: 'Failed to fetch article from provided URL'
     });
   }
 });
