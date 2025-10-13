@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
+const { log } = require('../utils/logger');
 const { processVideo } = require('../core/videoProcessor');
 const { describeImage, describeScene } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
