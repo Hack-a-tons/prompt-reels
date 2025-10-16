@@ -14,36 +14,39 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 
 ## ✅ Completed Features
 
-### Core Infrastructure
-- [x] Express API server with health checks
-- [x] Docker deployment (`docker compose up -d`)
-- [x] Production deployment (reels.hurated.com)
-- [x] Nginx configuration with 200MB upload limit
-- [x] W&B Weave integration for experiment tracking
-- [x] Azure OpenAI + Gemini dual-provider support
-- [x] Comprehensive test suite (`./test.sh`)
-- [x] 14+ bash scripts for automation
-- [x] Cleaned up .env configuration (removed unused keys)
+### Core Infrastructure (Oct 11-13, 2025)
+- [x] Express API server with health checks (Oct 11)
+- [x] Docker deployment (`docker compose up -d`) (Oct 11)
+- [x] Production deployment (reels.hurated.com) (Oct 11)
+- [x] Nginx configuration with 200MB upload limit (Oct 11)
+- [x] W&B Weave integration for experiment tracking (Oct 11)
+- [x] Azure OpenAI + Gemini dual-provider support (Oct 11)
+- [x] Comprehensive test suite (`./test.sh`) (Oct 11)
+- [x] 14+ bash scripts for automation (Oct 11-13)
+- [x] Cleaned up .env configuration (removed unused keys) (Oct 12)
 
-### Video Processing & Scene Detection
-- [x] **Video upload** - multer-based with 200MB limit
-- [x] **Scene detection** - ffmpeg scene filter for timestamps
-- [x] **Frame extraction** - 3 frames per scene (beginning/middle/end)
-- [x] **AI descriptions** - Multi-frame analysis with Azure/Gemini
-- [x] **Visual scene viewer** - Beautiful HTML page with video player
-- [x] **Scene JSON API** - Structured data for programmatic access
-- [x] **Static file serving** - Videos and frames accessible via URL
+### Video Processing & Scene Detection (Oct 11-16, 2025)
+- [x] **Video upload** - multer-based with 200MB limit (Oct 11)
+- [x] **Scene detection** - ffmpeg scene filter for timestamps (Oct 11)
+- [x] **Frame extraction** - 3 frames per scene (beginning/middle/end) (Oct 11)
+- [x] **AI descriptions** - Multi-frame analysis with Azure/Gemini (Oct 11)
+- [x] **Visual scene viewer** - Beautiful HTML page with video player (Oct 11)
+- [x] **Scene JSON API** - Structured data for programmatic access (Oct 11)
+- [x] **Static file serving** - Videos and frames accessible via URL (Oct 11)
+- [x] **Audio transcription** - Whisper API integration (Oct 16)
+- [x] **Language detection** - Auto-detect from audio, 20+ languages (Oct 16)
+- [x] **Multi-format support** - MP4, MOV, AVI, MKV, WEBM (Oct 16)
 
-### News Article Fetching ✨
-- [x] **Tavily integration** - Search for news articles with videos
-- [x] **Automatic RSS fallback** - Falls back to 13 RSS feeds when Tavily fails
-- [x] **Manual URL input** - Fetch specific articles via URL (`fetch-from-url.sh`)
-- [x] **BrowserBase integration** - Extract video URLs from articles
-- [x] **Automatic video download** - Direct video downloads to `uploads/articles/`
-- [x] **Rich metadata** - Article title, text, source, timestamps
-- [x] **Article listing API** - GET `/api/articles` and `/api/articles/:id`
-- [x] **fetch-news.sh** - CLI script for fetching articles
-- [x] **list.sh articles** - List fetched articles with metadata
+### News Article Fetching (Oct 12-13, 2025) ✨
+- [x] **Tavily integration** - Search for news articles with videos (Oct 12)
+- [x] **Automatic RSS fallback** - Falls back to 13 RSS feeds when Tavily fails (Oct 13)
+- [x] **Manual URL input** - Fetch specific articles via URL (`fetch-from-url.sh`) (Oct 13)
+- [x] **BrowserBase integration** - Extract video URLs from articles (Oct 12)
+- [x] **Automatic video download** - Direct video downloads to `uploads/articles/` (Oct 12)
+- [x] **Rich metadata** - Article title, text, source, timestamps (Oct 12)
+- [x] **Article listing API** - GET `/api/articles` and `/api/articles/:id` (Oct 12)
+- [x] **fetch-news.sh** - CLI script for fetching articles (Oct 12)
+- [x] `list.sh articles` - List fetched articles with metadata (Oct 12)
 
 ### Scripts & Automation
 - [x] `upload.sh` - Upload videos to API
@@ -57,51 +60,55 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] `fpo-history.sh` - View FPO optimization history with prompt templates
 - [x] `generate-thumbnails.sh` - **NEW:** Create lightweight video thumbnails for dashboard
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
-- [x] **Dashboard video thumbnails** - Auto-playing 160x90px previews
-- [x] **Score color coding** - Red/yellow/green for match scores
-- [x] **Multiline titles** - Up to 3 lines for better readability
-- [x] **Markdown rendering** - Proper formatting on article pages
-- [x] **Fixed multiline links** - Links normalize correctly
-- [x] **Dark mode everywhere** - Consistent across all pages
-- [x] **Buttons hide immediately** - On click, shows spinners
-- [x] **Bigger FPO button** - Prominent "Run FPO Iteration" button
-- [x] **Prompts page color coding** - **FIXED:** Green only for > baseline, red for < baseline
-- [x] **FPO button auto-disables** - Hides when script runs, polls every 3s
+- [x] **Dashboard video thumbnails** - Auto-playing 160x90px previews (Oct 12)
+- [x] **Score color coding** - Red/yellow/green for match scores (Oct 12)
+- [x] **Multiline titles** - Up to 3 lines for better readability (Oct 12)
+- [x] **Markdown rendering** - Proper formatting on article pages (Oct 12)
+- [x] **Fixed multiline links** - Links normalize correctly (Oct 12)
+- [x] **Dark mode everywhere** - Consistent across all pages (Oct 12)
+- [x] **Buttons hide immediately** - On click, shows spinners (Oct 12)
+- [x] **Bigger FPO button** - Prominent "Run FPO Iteration" button (Oct 12)
+- [x] **Prompts page color coding** - **FIXED:** Green only for > baseline, red for < baseline (Oct 12)
+- [x] **FPO button auto-disables** - Hides when script runs, polls every 3s (Oct 12)
+- [x] **Analyze page** - Upload and process videos via web UI (Oct 16)
+- [x] **Videos gallery** - Browse all processed videos (Oct 16)
+- [x] **Video title in headers** - AI-generated titles in page headers (Oct 16)
+- [x] **Comprehensive timing logs** - Track processing time for each stage (Oct 16)
 
-### Queue & Background Processing
-- [x] **Persistent queue system** - Survives Docker restarts (data/queues/)
-- [x] **Four queue types** - Fetch, Describe, Rate, FPO
-- [x] **Concurrent processing** - Up to 4 workers (1 per type)
-- [x] **Auto-retry** - Failed items retry up to 3 times
-- [x] **Queue status API** - GET /api/queue/status
-- [x] **status.sh script** - Monitor queues and flags
-- [x] **Flag system** - Prevents duplicate operations (/tmp/prompt-reels-flags/)
+### Queue & Background Processing (Oct 12, 2025)
+- [x] **Persistent queue system** - Survives Docker restarts (data/queues/) (Oct 12)
+- [x] **Four queue types** - Fetch, Describe, Rate, FPO (Oct 12)
+- [x] **Concurrent processing** - Up to 4 workers (1 per type) (Oct 12)
+- [x] **Auto-retry** - Failed items retry up to 3 times (Oct 12)
+- [x] **Queue status API** - GET /api/queue/status (Oct 12)
+- [x] **status.sh script** - Monitor queues and flags (Oct 12)
+- [x] **Flag system** - Prevents duplicate operations (/tmp/prompt-reels-flags/) (Oct 12)
 
-### Video Optimization
-- [x] **Range request support** - Fast video seeking
-- [x] **Local video playback** - All pages use downloaded videos
-- [x] **Whisper rate limiting** - 3 req/min, proactive waiting
-- [x] **Video thumbnails** - Lightweight previews for dashboard (1-2 MB vs 50-400 MB)
-- [x] **Auto-thumbnail generation** - Created automatically on video download
-- [x] **Thumbnail fallback** - Uses full video if thumbnail doesn't exist
-- [x] **generate-thumbnails.sh** - Script to create thumbnails for existing videos
-- [x] **Upload retry with exponential backoff** - 3 automatic retries on network failure
-- [x] **60-second timeout detection** - Catches stalled connections during upload
+### Video Optimization (Oct 12-16, 2025)
+- [x] **Range request support** - Fast video seeking (Oct 12)
+- [x] **Local video playback** - All pages use downloaded videos (Oct 12)
+- [x] **Whisper rate limiting** - 3 req/min, proactive waiting (Oct 16)
+- [x] **Video thumbnails** - Lightweight previews for dashboard (1-2 MB vs 50-400 MB) (Oct 12)
+- [x] **Auto-thumbnail generation** - Created automatically on video download (Oct 12)
+- [x] **Thumbnail fallback** - Uses full video if thumbnail doesn't exist (Oct 12)
+- [x] **generate-thumbnails.sh** - Script to create thumbnails for existing videos (Oct 12)
+- [x] **Upload retry with exponential backoff** - 3 automatic retries on network failure (Oct 16)
+- [x] **60-second timeout detection** - Catches stalled connections during upload (Oct 16)
 
-### FPO Improvements
-- [x] **Automatic FPO on rating** - Runs when articles rated
-- [x] **Manual FPO button** - On prompts page
-- [x] **Uses real article data** - No more "No test data available"
-- [x] **Finds described articles** - 13+ articles with frames
-- [x] **Semantic similarity scoring** - Real scores, not 0.0000
-- [x] **Fixed test data lookup** - Uses article-*_frames/ structure
-- [x] **evolve.sh enhanced** - Flexible syntax (10, -n 10, -n10), merged with run-fpo.sh
-- [x] **Random article selection** - Each iteration uses different article/scene/frame
-- [x] **Improved diversity** - Better generalization, less overfitting
-- [x] **fpo-history.sh shows templates** - View prompts with their actual text
-- [x] **Single prompt set** - Same 5 prompts for scene description AND matching
-- [x] **Genetic evolution** - Creates new prompts every 2 iterations
-- [x] **Auto-used best prompt** - Top-ranked prompt automatically used everywhere
+### FPO Improvements (Oct 11-12, 2025)
+- [x] **Automatic FPO on rating** - Runs when articles rated (Oct 12)
+- [x] **Manual FPO button** - On prompts page (Oct 12)
+- [x] **Uses real article data** - No more "No test data available" (Oct 12)
+- [x] **Finds described articles** - 13+ articles with frames (Oct 12)
+- [x] **Semantic similarity scoring** - Real scores, not 0.0000 (Oct 12)
+- [x] **Fixed test data lookup** - Uses article-*_frames/ structure (Oct 12)
+- [x] **evolve.sh enhanced** - Flexible syntax (10, -n 10, -n10), merged with run-fpo.sh (Oct 11)
+- [x] **Random article selection** - Each iteration uses different article/scene/frame (Oct 12)
+- [x] **Improved diversity** - Better generalization, less overfitting (Oct 12)
+- [x] **fpo-history.sh shows templates** - View prompts with their actual text (Oct 11)
+- [x] **Single prompt set** - Same 5 prompts for scene description AND matching (Oct 12)
+- [x] **Genetic evolution** - Creates new prompts every 2 iterations (Oct 11)
+- [x] **Auto-used best prompt** - Top-ranked prompt automatically used everywhere (Oct 12)
 
 ---
 
