@@ -610,9 +610,10 @@ router.get('/scenes/:videoId', (req, res) => {
       videoPath = `api/articles/${videoId}.mp4`;
       backLink = `/articles/${videoId}`;
     } else {
-      // Find the actual video file for user uploads
+      // Find the actual video file for user uploads (supports multiple formats)
+      const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
       const uploadFiles = fs.readdirSync(config.uploadDir)
-        .filter(f => f.startsWith(videoId) && f.endsWith('.mp4'));
+        .filter(f => f.startsWith(videoId) && videoExtensions.some(ext => f.endsWith(ext)));
       videoPath = uploadFiles.length > 0 ? `uploads/${uploadFiles[0]}` : `uploads/${videoId}.mp4`;
       backLink = '/videos';
     }
