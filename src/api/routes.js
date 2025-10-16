@@ -324,47 +324,15 @@ router.post('/detect-scenes', async (req, res) => {
     console.log(`\n🎬 Scene detection for: ${videoId}`);
     let scenes = await detectScenes(videoPath, threshold);
     
+    // Language handling (user-specified or auto-detected)
+    let detectedLanguage = language;
+    
     // Optionally extract frames
     if (extractFrames) {
       const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
       scenes = await extractSceneFrames(videoPath, scenes, framesDir);
       
-      // Optionally describe scenes based on frames
-      if (describeScenes) {
-        console.log(`\n📝 Generating scene descriptions...`);
-        
-        for (let i = 0; i < scenes.length; i++) {
-          const scene = scenes[i];
-          
-          if (scene.frames && scene.frames.length > 0) {
-            try {
-              console.log(`  Describing scene ${scene.sceneId}...`);
-              
-              // Get absolute paths to frame files
-              const framePaths = scene.frames.map(frame => frame.path);
-              
-              // Generate description
-              const description = await describeScene(
-                framePaths,
-                scene.sceneId,
-                scene.start,
-                scene.end
-              );
-              
-              // Add description to scene
-              scene.description = description;
-              console.log(`  ✓ Scene ${scene.sceneId}: ${description.substring(0, 60)}...`);
-            } catch (error) {
-              console.error(`  ✗ Failed to describe scene ${scene.sceneId}:`, error.message);
-              scene.description = null;
-            }
-          }
-        }
-        
-        console.log(`✓ Scene descriptions complete\n`);
-      }
-      
-      // Optionally transcribe audio for each scene
+      // Step 1: Transcribe audio FIRST (if enabled) to detect language before describing
       if (transcribeAudio) {
         console.log(`\n🎙️ Transcribing audio...`);
         
@@ -379,7 +347,7 @@ router.post('/detect-scenes', async (req, res) => {
               scene.sceneId,
               scene.start,
               scene.end,
-              videoId
+              config.outputDir
             );
             
             if (transcript && transcript.text && transcript.text.trim()) {
@@ -394,45 +362,58 @@ router.post('/detect-scenes', async (req, res) => {
         }
         
         console.log(`✓ Audio transcription complete\n`);
-      }
-    }
-
-    // Detect language from transcripts if not specified by user
-    let detectedLanguage = language;
-    if (!detectedLanguage && transcribeAudio && scenes.length > 0) {
-      const transcripts = scenes.map(s => s.transcript?.text).filter(Boolean).join(' ');
-      if (transcripts.length > 50) {
-        detectedLanguage = detectLanguageFromText(transcripts);
-        console.log(`🌐 Auto-detected language: ${detectedLanguage}`);
-      }
-    }
-
-    // Update scene descriptions with detected language
-    if (describeScenes && detectedLanguage && detectedLanguage.toLowerCase() !== 'english') {
-      console.log(`\n🌐 Regenerating descriptions in ${detectedLanguage}...`);
-      
-      for (let i = 0; i < scenes.length; i++) {
-        const scene = scenes[i];
         
-        if (scene.frames && scene.frames.length > 0 && scene.description) {
-          try {
-            const framePaths = scene.frames.map(frame => frame.path);
-            const languagePrompt = `Please provide your response in ${detectedLanguage} language.`;
-            
-            scene.description = await describeScene(
-              framePaths,
-              scene.sceneId,
-              scene.start,
-              scene.end,
-              languagePrompt
-            );
-            console.log(`  ✓ Scene ${scene.sceneId} (${detectedLanguage})`);
-          } catch (error) {
-            console.error(`  ✗ Failed to translate scene ${scene.sceneId}:`, error.message);
+        // Step 2: Detect language from transcripts (if user didn't specify)
+        if (!detectedLanguage && scenes.length > 0) {
+          const transcripts = scenes.map(s => s.transcript?.text).filter(Boolean).join(' ');
+          if (transcripts.length > 50) {
+            detectedLanguage = detectLanguageFromText(transcripts);
+            console.log(`🌐 Auto-detected language: ${detectedLanguage}\n`);
           }
         }
       }
-      console.log(`✓ Descriptions in ${detectedLanguage} complete\n`);
+      
+      // Step 3: Describe scenes ONCE in the correct language
+      if (describeScenes) {
+        const targetLanguage = detectedLanguage || 'English';
+        console.log(`\n📝 Generating scene descriptions in ${targetLanguage}...`);
+        
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
+          
+          if (scene.frames && scene.frames.length > 0) {
+            try {
+              console.log(`  Describing scene ${scene.sceneId}...`);
+              
+              // Get absolute paths to frame files
+              const framePaths = scene.frames.map(frame => frame.path);
+              
+              // Add language instruction if not English
+              const languagePrompt = (detectedLanguage && detectedLanguage.toLowerCase() !== 'english') 
+                ? `Please provide your response in ${detectedLanguage} language.`
+                : undefined;
+              
+              // Generate description in target language
+              const description = await describeScene(
+                framePaths,
+                scene.sceneId,
+                scene.start,
+                scene.end,
+                languagePrompt
+              );
+              
+              // Add description to scene
+              scene.description = description;
+              console.log(`  ✓ Scene ${scene.sceneId}: ${description.substring(0, 60)}...`);
+            } catch (error) {
+              console.error(`  ✗ Failed to describe scene ${scene.sceneId}:`, error.message);
+              scene.description = null;
+            }
+          }
+        }
+        
+        console.log(`✓ Scene descriptions complete\n`);
+      }
     }
 
     // Save scene data
@@ -889,9 +870,7 @@ router.get('/scenes/:videoId', (req, res) => {
 </head>
 <body>
   <div class="header">
-    ${videoId.startsWith('article-') ? `
-      <a href="${backLink}" class="back-link">← Back</a>
-    ` : ''}
+    <a href="${backLink}" class="back-link">← ${videoId.startsWith('article-') ? 'Back' : 'My Videos'}</a>
     <h1>🎬 Scene Viewer</h1>
     <p>Video ID: ${videoId}</p>
     ${!videoId.startsWith('article-') ? `
