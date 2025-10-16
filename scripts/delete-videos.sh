@@ -14,24 +14,39 @@ NC='\033[0m' # No Color
 
 # Detect environment
 if command -v docker &> /dev/null && docker ps &> /dev/null; then
-    ENV="production"
-    UPLOAD_DIR="/root/prompt-reels/uploads"
-    OUTPUT_DIR="/root/prompt-reels/output"
-    USE_SSH=false
-    echo -e "${BLUE}Environment: Production (Docker detected, local)${NC}"
+    # Check if we're inside docker or have docker locally
+    if [ -f /.dockerenv ]; then
+        ENV="production"
+        UPLOAD_DIR="/app/uploads"
+        OUTPUT_DIR="/app/output"
+        USE_SSH=false
+        USE_DOCKER=false
+        echo -e "${BLUE}Environment: Production (inside Docker container)${NC}"
+    else
+        ENV="production"
+        UPLOAD_DIR="/app/uploads"
+        OUTPUT_DIR="/app/output"
+        USE_SSH=false
+        USE_DOCKER=true
+        DOCKER_CONTAINER="prompt-reels"
+        echo -e "${BLUE}Environment: Production (local with Docker)${NC}"
+    fi
 else
     # Check if we can SSH to production server
     if ssh -o ConnectTimeout=2 -o BatchMode=yes reels.hurated.com "exit" &> /dev/null; then
         ENV="production"
-        UPLOAD_DIR="/root/prompt-reels/uploads"
-        OUTPUT_DIR="/root/prompt-reels/output"
+        UPLOAD_DIR="/app/uploads"
+        OUTPUT_DIR="/app/output"
         USE_SSH=true
+        USE_DOCKER=true
+        DOCKER_CONTAINER="prompt-reels"
         echo -e "${BLUE}Environment: Production (via SSH from dev machine)${NC}"
     else
         ENV="development"
         UPLOAD_DIR="./uploads"
         OUTPUT_DIR="./output"
         USE_SSH=false
+        USE_DOCKER=false
         echo -e "${BLUE}Environment: Development (local)${NC}"
     fi
 fi
@@ -51,56 +66,70 @@ fi
 
 VIDEO_IDS=("$@")
 
-# Helper function to check if file exists (works with SSH or local)
+# Helper function to check if file exists (works with SSH, Docker, or local)
 file_exists() {
     local path="$1"
     if [ "$USE_SSH" = true ]; then
-        ssh reels.hurated.com "[ -f '$path' ]" 2>/dev/null
+        ssh reels.hurated.com "docker exec $DOCKER_CONTAINER [ -f '$path' ]" 2>/dev/null
+    elif [ "$USE_DOCKER" = true ]; then
+        docker exec $DOCKER_CONTAINER [ -f "$path" ] 2>/dev/null
     else
         [ -f "$path" ]
     fi
 }
 
-# Helper function to check if directory exists (works with SSH or local)
+# Helper function to check if directory exists (works with SSH, Docker, or local)
 dir_exists() {
     local path="$1"
     if [ "$USE_SSH" = true ]; then
-        ssh reels.hurated.com "[ -d '$path' ]" 2>/dev/null
+        ssh reels.hurated.com "docker exec $DOCKER_CONTAINER [ -d '$path' ]" 2>/dev/null
+    elif [ "$USE_DOCKER" = true ]; then
+        docker exec $DOCKER_CONTAINER [ -d "$path" ] 2>/dev/null
     else
         [ -d "$path" ]
     fi
 }
 
-# Helper function to count files in directory (works with SSH or local)
+# Helper function to count files in directory (works with SSH, Docker, or local)
 count_files() {
     local path="$1"
     if [ "$USE_SSH" = true ]; then
-        ssh reels.hurated.com "find '$path' -type f 2>/dev/null | wc -l" 2>/dev/null || echo "0"
+        ssh reels.hurated.com "docker exec $DOCKER_CONTAINER find '$path' -type f 2>/dev/null | wc -l" 2>/dev/null | tr -d ' ' || echo "0"
+    elif [ "$USE_DOCKER" = true ]; then
+        docker exec $DOCKER_CONTAINER find "$path" -type f 2>/dev/null | wc -l | tr -d ' ' || echo "0"
     else
         find "$path" -type f 2>/dev/null | wc -l || echo "0"
     fi
 }
 
-# Helper function to get file size (works with SSH or local)
+# Helper function to get file size (works with SSH, Docker, or local)
 get_file_size() {
     local path="$1"
     if [ "$USE_SSH" = true ]; then
-        ssh reels.hurated.com "du -h '$path' 2>/dev/null | cut -f1" 2>/dev/null || echo "?"
+        ssh reels.hurated.com "docker exec $DOCKER_CONTAINER du -h '$path' 2>/dev/null | cut -f1" 2>/dev/null || echo "?"
+    elif [ "$USE_DOCKER" = true ]; then
+        docker exec $DOCKER_CONTAINER du -h "$path" 2>/dev/null | cut -f1 || echo "?"
     else
         du -h "$path" 2>/dev/null | cut -f1 || echo "?"
     fi
 }
 
-# Helper function to delete file/directory (works with SSH or local)
+# Helper function to delete file/directory (works with SSH, Docker, or local)
 delete_path() {
     local path="$1"
     local is_dir="$2"
     
     if [ "$USE_SSH" = true ]; then
         if [ "$is_dir" = true ]; then
-            ssh reels.hurated.com "rm -rf '$path'" 2>/dev/null
+            ssh reels.hurated.com "docker exec $DOCKER_CONTAINER rm -rf '$path'" 2>/dev/null
         else
-            ssh reels.hurated.com "rm -f '$path'" 2>/dev/null
+            ssh reels.hurated.com "docker exec $DOCKER_CONTAINER rm -f '$path'" 2>/dev/null
+        fi
+    elif [ "$USE_DOCKER" = true ]; then
+        if [ "$is_dir" = true ]; then
+            docker exec $DOCKER_CONTAINER rm -rf "$path" 2>/dev/null
+        else
+            docker exec $DOCKER_CONTAINER rm -f "$path" 2>/dev/null
         fi
     else
         if [ "$is_dir" = true ]; then

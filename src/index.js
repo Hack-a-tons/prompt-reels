@@ -9,6 +9,24 @@ const { logMiddleware } = require('./utils/logger');
 
 const app = express();
 
+// Server startup time for build timestamp
+const serverStartTime = new Date().toISOString();
+
+// Helper function to generate build timestamp footer
+const getBuildTimestamp = () => {
+  const buildDate = new Date(serverStartTime);
+  return `
+    <div style="position: fixed; bottom: 10px; right: 10px; font-size: 10px; color: #71767b; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; backdrop-filter: blur(4px);">
+      Build: ${buildDate.toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      })}
+    </div>
+  `;
+};
+
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -626,6 +644,7 @@ app.get('/analyze', (req, res) => {
             errorDiv.style.display = 'block';
         }
     </script>
+    ${getBuildTimestamp()}
 </body>
 </html>
   `;
@@ -648,6 +667,15 @@ app.get('/videos', (req, res) => {
         const scenePath = path.join(outputDir, file);
         const sceneData = JSON.parse(fs.readFileSync(scenePath, 'utf8'));
         
+        // Generate title from transcripts (priority) and descriptions
+        const transcripts = sceneData.scenes?.map(s => s.transcript?.text).filter(Boolean).join(' ') || '';
+        const descriptions = sceneData.scenes?.map(s => s.description).filter(Boolean).join(' ') || '';
+        const combined = (transcripts + ' ' + descriptions).trim();
+        let title = 'Untitled Video';
+        if (combined.length > 0) {
+          title = combined.length > 100 ? combined.substring(0, 97) + '...' : combined;
+        }
+        
         videos.push({
           videoId: sceneData.videoId,
           sceneCount: sceneData.sceneCount,
@@ -656,6 +684,8 @@ app.get('/videos', (req, res) => {
           hasScenes: sceneData.scenes && sceneData.scenes.length > 0,
           hasDescriptions: sceneData.scenes && sceneData.scenes.some(s => s.description),
           hasTranscripts: sceneData.scenes && sceneData.scenes.some(s => s.transcript),
+          language: sceneData.language || 'English',
+          title: title,
         });
       } catch (error) {
         console.error(`Error reading ${file}:`, error.message);
@@ -854,10 +884,9 @@ app.get('/videos', (req, res) => {
             <thead>
                 <tr>
                     <th>Preview</th>
+                    <th>Title</th>
                     <th>Video ID</th>
                     <th>Scenes</th>
-                    <th>Descriptions</th>
-                    <th>Transcripts</th>
                     <th>Uploaded</th>
                     <th>Actions</th>
                 </tr>
@@ -868,14 +897,24 @@ app.get('/videos', (req, res) => {
                     const thumbnailPath = `/api/thumbnails/${video.videoId}.mp4`;
                     const videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${thumbnailPath}" type="video/mp4" onerror="this.parentElement.outerHTML='<div class=\"no-video\">No preview</div>'"></video>`;
                     
+                    // Generate scene info badges
+                    const badges = [];
+                    if (video.hasDescriptions) badges.push('<span class="badge yes" style="font-size: 10px; padding: 2px 6px;">desc</span>');
+                    if (video.hasTranscripts) badges.push('<span class="badge yes" style="font-size: 10px; padding: 2px 6px;">text</span>');
+                    const scenesInfo = `
+                      <div style="text-align: center;">
+                        <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">${video.sceneCount}</div>
+                        ${badges.join(' ')}
+                      </div>
+                    `;
+                    
                     return `
                 <tr>
                     <td>${videoHtml}</td>
-                    <td><a href="/api/scenes/${video.videoId}" class="video-id">${video.videoId}</a></td>
-                    <td>${video.sceneCount}</td>
-                    <td><span class="badge ${video.hasDescriptions ? 'yes' : 'no'}">${video.hasDescriptions ? 'Yes' : 'No'}</span></td>
-                    <td><span class="badge ${video.hasTranscripts ? 'yes' : 'no'}">${video.hasTranscripts ? 'Yes' : 'No'}</span></td>
-                    <td>${new Date(video.timestamp).toLocaleString()}</td>
+                    <td style="max-width: 300px;"><div style="font-weight: 500; margin-bottom: 4px;">${video.title}</div><div style="font-size: 11px; color: #71767b;">${video.language}</div></td>
+                    <td><a href="/api/scenes/${video.videoId}" class="video-id" style="font-size: 12px;">${video.videoId}</a></td>
+                    <td>${scenesInfo}</td>
+                    <td style="font-size: 13px;">${new Date(video.timestamp).toLocaleString()}</td>
                     <td><a href="/api/scenes/${video.videoId}" class="btn" style="padding: 6px 16px; font-size: 13px;">View</a></td>
                 </tr>
                 `;
@@ -909,6 +948,7 @@ app.get('/videos', (req, res) => {
             });
         });
     </script>
+    ${getBuildTimestamp()}
 </body>
 </html>
   `;
