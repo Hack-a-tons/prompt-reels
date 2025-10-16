@@ -10,6 +10,39 @@ const FormData = require('form-data');
 const axios = require('axios');
 const config = require('../config');
 
+/**
+ * Convert language names to ISO 639-1 codes for Whisper
+ * @param {string} language - Language name (e.g., "English", "Russian", "Italian")
+ * @returns {string|null} ISO 639-1 code or null if unknown
+ */
+const getLanguageCode = (language) => {
+  const languageMap = {
+    'english': 'en',
+    'russian': 'ru',
+    'italian': 'it',
+    'spanish': 'es',
+    'french': 'fr',
+    'german': 'de',
+    'portuguese': 'pt',
+    'chinese': 'zh',
+    'japanese': 'ja',
+    'korean': 'ko',
+    'arabic': 'ar',
+    'hindi': 'hi',
+    'turkish': 'tr',
+    'dutch': 'nl',
+    'polish': 'pl',
+    'ukrainian': 'uk',
+    'swedish': 'sv',
+    'danish': 'da',
+    'norwegian': 'no',
+    'finnish': 'fi',
+  };
+  
+  const normalized = language.toLowerCase().trim();
+  return languageMap[normalized] || null;
+};
+
 // Rate limiting for Whisper API (3 requests per minute = 20s between calls)
 let lastWhisperCall = 0;
 const WHISPER_MIN_INTERVAL = 20000; // 20 seconds
@@ -47,9 +80,10 @@ const extractAudioSegment = async (videoPath, start, end, outputPath) => {
 /**
  * Transcribe audio using Azure OpenAI Whisper
  * @param {string} audioPath - Path to audio file
- * @returns {Promise<string|null>} Transcribed text or null if no speech detected
+ * @param {string} targetLanguage - Optional target language for transcription (default: auto-detect)
+ * @returns {Promise<Object|null>} Object with {text, language} or null if no speech detected
  */
-const transcribeAudio = async (audioPath) => {
+const transcribeAudio = async (audioPath, targetLanguage = null) => {
   if (!config.azureOpenAI.apiKey) {
     console.warn('Azure OpenAI not configured, skipping transcription');
     return null;
@@ -72,8 +106,18 @@ const transcribeAudio = async (audioPath) => {
     const formData = new FormData();
     formData.append('file', fs.createReadStream(audioPath));
     formData.append('model', 'whisper-1');
-    formData.append('language', 'en'); // Can be made configurable
-    formData.append('response_format', 'text');
+    
+    // If target language specified, use it; otherwise let Whisper auto-detect
+    if (targetLanguage) {
+      // Convert language name to ISO 639-1 code if needed
+      const langCode = getLanguageCode(targetLanguage);
+      if (langCode) {
+        formData.append('language', langCode);
+      }
+    }
+    
+    // Use verbose_json to get detected language
+    formData.append('response_format', 'verbose_json');
     
     // Respect rate limit (3 requests per minute)
     const now = Date.now();
@@ -105,14 +149,20 @@ const transcribeAudio = async (audioPath) => {
           }
         );
         
-        const transcript = response.data.trim();
+        // verbose_json returns: { text, language, duration, segments, ... }
+        const data = response.data;
+        const transcript = data.text?.trim() || '';
+        const detectedLanguage = data.language || 'unknown';
         
         // Return null if transcript is empty or just noise markers
         if (!transcript || transcript.length < 3) {
           return null;
         }
         
-        return transcript;
+        return {
+          text: transcript,
+          language: detectedLanguage
+        };
         
       } catch (error) {
         // Handle rate limiting (429)
@@ -158,33 +208,34 @@ const transcribeAudio = async (audioPath) => {
  * @param {number} start - Scene start time
  * @param {number} end - Scene end time
  * @param {string} tempDir - Directory for temporary files
+ * @param {string} targetLanguage - Optional target language for transcription
  * @returns {Promise<Object|null>} Transcript object with text and metadata, or null
  */
-const transcribeSceneAudio = async (videoPath, sceneId, start, end, tempDir) => {
+const transcribeSceneAudio = async (videoPath, sceneId, start, end, tempDir, targetLanguage = null) => {
   const audioPath = path.join(tempDir, `scene-${sceneId}-audio.mp3`);
   
   try {
     // Extract audio segment
     await extractAudioSegment(videoPath, start, end, audioPath);
     
-    // Transcribe audio
-    const transcript = await transcribeAudio(audioPath);
+    // Transcribe audio with target language
+    const result = await transcribeAudio(audioPath, targetLanguage);
     
     // Clean up temp audio file
     if (fs.existsSync(audioPath)) {
       fs.unlinkSync(audioPath);
     }
     
-    if (!transcript) {
+    if (!result) {
       return null;
     }
     
     return {
-      text: transcript,
+      text: result.text,
       start,
       end,
       duration: end - start,
-      language: 'en',
+      language: result.language,
     };
   } catch (error) {
     // Clean up on error

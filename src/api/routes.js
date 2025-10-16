@@ -334,7 +334,64 @@ router.post('/detect-scenes', async (req, res) => {
       
       // Step 1: Transcribe audio FIRST (if enabled) to detect language before describing
       if (transcribeAudio) {
-        console.log(`\n🎙️ Transcribing audio...`);
+        console.log(`\n🎙️ Transcribing audio to detect language...`);
+        
+        // First pass: transcribe first scene WITHOUT target language to detect spoken language
+        // Whisper will auto-detect and return language code
+        let whisperDetectedLang = null;
+        for (let i = 0; i < Math.min(3, scenes.length) && !whisperDetectedLang; i++) {
+          const scene = scenes[i];
+          try {
+            const transcript = await transcribeSceneAudio(
+              videoPath,
+              scene.sceneId,
+              scene.start,
+              scene.end,
+              config.outputDir,
+              null // No target language - let Whisper detect
+            );
+            
+            if (transcript && transcript.language) {
+              whisperDetectedLang = transcript.language;
+              console.log(`  ✓ Detected language: ${whisperDetectedLang}`);
+              break;
+            }
+          } catch (error) {
+            console.log(`  - Scene ${scene.sceneId}: No speech for detection`);
+          }
+        }
+        
+        // Convert detected language to full name (if user didn't specify)
+        if (!detectedLanguage && whisperDetectedLang) {
+          const languageNames = {
+            'en': 'English',
+            'ru': 'Russian',
+            'it': 'Italian',
+            'es': 'Spanish',
+            'fr': 'French',
+            'de': 'German',
+            'pt': 'Portuguese',
+            'zh': 'Chinese',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'ar': 'Arabic',
+            'hi': 'Hindi',
+            'tr': 'Turkish',
+            'nl': 'Dutch',
+            'pl': 'Polish',
+            'uk': 'Ukrainian',
+            'sv': 'Swedish',
+            'da': 'Danish',
+            'no': 'Norwegian',
+            'fi': 'Finnish',
+          };
+          detectedLanguage = languageNames[whisperDetectedLang] || whisperDetectedLang;
+          console.log(`🌐 Detected language from audio: ${detectedLanguage}\n`);
+        }
+        
+        // Second pass: transcribe ALL scenes WITH detected language to keep original language
+        const targetLang = detectedLanguage || 'English';
+        console.log(`🎙️ Transcribing all scenes in ${targetLang}...`);
         
         for (let i = 0; i < scenes.length; i++) {
           const scene = scenes[i];
@@ -347,7 +404,8 @@ router.post('/detect-scenes', async (req, res) => {
               scene.sceneId,
               scene.start,
               scene.end,
-              config.outputDir
+              config.outputDir,
+              targetLang // Use detected language to keep transcription in original language
             );
             
             if (transcript && transcript.text && transcript.text.trim()) {
@@ -362,15 +420,6 @@ router.post('/detect-scenes', async (req, res) => {
         }
         
         console.log(`✓ Audio transcription complete\n`);
-        
-        // Step 2: Detect language from transcripts (if user didn't specify)
-        if (!detectedLanguage && scenes.length > 0) {
-          const transcripts = scenes.map(s => s.transcript?.text).filter(Boolean).join(' ');
-          if (transcripts.length > 50) {
-            detectedLanguage = detectLanguageFromText(transcripts);
-            console.log(`🌐 Auto-detected language: ${detectedLanguage}\n`);
-          }
-        }
       }
       
       // Step 3: Describe scenes ONCE in the correct language
