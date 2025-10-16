@@ -57,34 +57,6 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] `fpo-history.sh` - View FPO optimization history with prompt templates
 - [x] `generate-thumbnails.sh` - **NEW:** Create lightweight video thumbnails for dashboard
 - [x] `deploy.sh` - Deploy to production with Docker rebuild
-- [x] `cleanup.sh` - Clean with targets (all/articles/output/uploads/prompts)
-- [x] `show-prompts.sh` - Display prompt templates
-- [x] `reset-prompts.sh` - Reset prompts to default state
-- [x] `fix-nginx-upload-limit.sh` - Guide for nginx config
-- [x] `free-port.sh` - Kill process on port
-- [x] `run-dev.sh` - Start dev server with nodemon
-- [x] `test.sh` - Test script
-
-### Federated Prompt Optimization (FPO)
-- [x] 5+ prompt templates with performance tracking
-- [x] Genetic evolution with crossover and mutation
-- [x] Multi-domain simulation (news, sports, reels)
-- [x] Weave logging for all evaluations
-- [x] Weight-based prompt selection
-- [x] Generation tracking and parent lineage
-- [x] `/api/fpo/run` and `/api/fpo/status` endpoints
-
-### Scene Viewer Features
-- [x] Auto-playing video with scenes
-- [x] 3 frames per scene displayed
-- [x] AI-generated scene descriptions
-- [x] Click timestamp to seek video
-- [x] Auto-highlight current scene during playback
-- [x] Responsive mobile-friendly design
-- [x] Modern gradient UI with smooth animations
-- [x] Dark mode throughout (consistent theme)
-
-### UI/UX Improvements (Latest)
 - [x] **Dashboard video thumbnails** - Auto-playing 160x90px previews
 - [x] **Score color coding** - Red/yellow/green for match scores
 - [x] **Multiline titles** - Up to 3 lines for better readability
@@ -209,7 +181,354 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 
 ---
 
-## 📝 Remaining Tasks (Optional Enhancements)
+## 📝 NEW FEATURES - USER EXPERIENCE IMPROVEMENTS
+
+### Recently Added (Jan 16, 2025)
+- [x] AI-generated scene titles (combining visual + dialogue)
+- [x] AI-generated video titles (overall summary)
+- [x] Comprehensive timing logs for all processing stages
+- [x] Video title and ID in timing summary logs
+- [x] Video title in Scene Viewer page header (replaces "Scene Viewer")
+- [x] Transcript formatting with AI (punctuation, paragraphs, emphasis)
+- [x] Cookie-parser integration (foundation for ownership)
+
+---
+
+## 🚀 PHASE 4: TEXT ENHANCEMENT (Next Priority)
+**Status:** Ready to implement  
+**Time Estimate:** 1-2 hours total
+
+### A. Clickable URLs and Emails (30 minutes)
+- [ ] Auto-detect URLs in transcripts and descriptions
+- [ ] Make URLs clickable with `target="_blank"`
+- [ ] Auto-detect email addresses
+- [ ] Make emails clickable with `mailto:` links
+- [ ] Remove blue color from non-link text
+- [ ] Only make URLs/emails blue
+
+**Implementation:**
+```javascript
+function linkifyText(text) {
+  // URLs
+  text = text.replace(/(https?:\/\/[^\s]+)/g, 
+    '<a href="$1" target="_blank" style="color: #1d9bf0;">$1</a>');
+  
+  // Emails
+  text = text.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/g,
+    '<a href="mailto:$1" style="color: #1d9bf0;">$1</a>');
+  
+  return text;
+}
+```
+
+### B. Field Type Separation (1 hour)
+Special formatting for different field types:
+
+- [ ] **Names** - Proper capitalization, bold
+  - Pattern: `@([A-Z][a-z]+ [A-Z][a-z]+)` or context-based
+  - Example: "john smith" → "**John Smith**"
+
+- [ ] **URLs** - Clickable, blue (see above)
+  - Pattern: `(https?://[^\s]+)`
+
+- [ ] **Emails** - Clickable, blue (see above)  
+  - Pattern: `([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+)`
+
+- [ ] **App/Script Names** - Monospace font, light background
+  - Pattern: `([a-zA-Z0-9_-]+\.(sh|js|py|rb|go|rs|ts|tsx|jsx|cpp|c|h|java|kt|swift|m|mm|php|pl))`
+  - Example: `test.sh` → `<code>test.sh</code>`
+  - Common executables: npm, git, docker, ffmpeg, python, node
+
+**CSS:**
+```css
+.description code {
+  font-family: 'Courier New', monospace;
+  background: rgba(110, 118, 125, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+```
+
+---
+
+## 🔧 PHASE 5: OWNERSHIP & EDITING (Medium Priority)
+**Status:** Cookie-parser ready, implementation needed  
+**Time Estimate:** 3-4 hours total
+
+### A. Cookie-Based Ownership (1 hour)
+- [ ] Generate unique user ID on first visit
+- [ ] Store user ID in cookie (365 days, httpOnly, sameSite=lax)
+- [ ] Add `ownerId` field to scene JSON on upload
+- [ ] Check ownership when displaying videos
+- [ ] Show "My Videos" vs "All Videos" filter on videos page
+- [ ] Add ownership indicator badge
+
+**Security:**
+```javascript
+res.cookie('userId', userId, {
+  maxAge: 365 * 24 * 60 * 60 * 1000,
+  httpOnly: true,
+  secure: false,  // true in production
+  sameSite: 'lax'
+});
+```
+
+### B. Edit Capability (1.5 hours)
+- [ ] Add "✏️ Edit" button (only visible for owned videos)
+- [ ] Inline editing for video title
+- [ ] Inline editing for scene titles
+- [ ] Textarea editing for scene descriptions
+- [ ] Textarea editing for transcripts (separated by field type)
+- [ ] "💾 Save" / "❌ Cancel" buttons
+- [ ] POST `/api/edit/:videoId` endpoint
+- [ ] Update JSON file on save
+- [ ] Authorization check via cookie
+
+**UI:**
+```
+[Video Title]  [✏️ Edit]
+                 ↓
+[Input field]  [💾 Save] [❌ Cancel]
+```
+
+### C. Delete Capability (30 minutes)
+- [ ] Add "🗑️ Delete Video" button (only for owned videos)
+- [ ] Confirmation dialog: "Delete this video? Cannot be undone."
+- [ ] DELETE `/api/delete/:videoId` endpoint
+- [ ] Check ownership via cookie (403 if not owner)
+- [ ] Delete all files:
+  - Video file (`uploads/video-*.mp4`)
+  - Thumbnail (`uploads/video-*-thumb.jpg`)
+  - Scene frames directory (`output/video-*_scenes/`)
+  - Scene JSON (`output/video-*_scenes.json`)
+- [ ] Redirect to videos page after deletion
+
+---
+
+## 🏗️ PHASE 6: PROCESSING PIPELINE SEPARATION (High Priority)
+**Status:** Major architectural change  
+**Time Estimate:** 5-6 hours total
+
+### Problem
+Currently everything runs in one workflow:
+```
+Upload → Scene Detection → Frame Extraction → Transcription → Descriptions
+```
+
+If you want to change language or threshold, you must redo everything.
+
+### Solution: Stateful Processing
+
+#### Step 1: Add Processing State to JSON (1 hour)
+```json
+{
+  "videoId": "video-123",
+  "title": "Team Meeting",
+  "ownerId": "abc123",
+  "processingState": {
+    "upload": {
+      "completed": true,
+      "timestamp": "2025-01-16T12:00:00Z",
+      "data": { "filename": "video-123.mp4", "size": 15728640 }
+    },
+    "sceneDetection": {
+      "completed": true,
+      "timestamp": "2025-01-16T12:00:15Z",
+      "params": { "threshold": 0.4 },
+      "data": { "sceneCount": 12 }
+    },
+    "frameExtraction": { "completed": true, "timestamp": "..." },
+    "transcription": {
+      "completed": true,
+      "params": { "language": "Russian", "autoDetected": true }
+    },
+    "descriptions": {
+      "completed": true,
+      "params": { "language": "Russian" }
+    }
+  }
+}
+```
+
+#### Step 2: Create Reprocessing Endpoints (2 hours)
+- [ ] POST `/api/reprocess/:videoId` with body:
+  ```json
+  {
+    "from": "transcription",
+    "params": {
+      "language": "English",
+      "threshold": 0.3
+    }
+  }
+  ```
+- [ ] Validate ownership before reprocessing
+- [ ] Clear dependent steps (e.g., if redoing transcription, clear descriptions too)
+- [ ] Run from specified step onwards
+- [ ] Update processing state after each step
+
+#### Step 3: Add UI Controls (2 hours)
+- [ ] Show processing state indicators (✅ complete, ⏸️ incomplete)
+- [ ] Add "Reprocess from..." dropdown (only for owners)
+- [ ] Options:
+  - "Scene Detection" (with threshold slider)
+  - "Transcription" (with language selector)
+  - "Descriptions" (inherits language)
+- [ ] Confirmation dialog: "This will redo steps X, Y, Z. Continue?"
+- [ ] Progress indicator during reprocessing
+- [ ] Auto-refresh page when complete
+
+#### Step 4: Refactor Code (1 hour)
+- [ ] Extract each processing step into separate async function
+- [ ] Make steps idempotent (can run multiple times safely)
+- [ ] Add step dependency checking
+- [ ] Update timing logs to show skipped steps
+
+**Benefits:**
+- ✅ Don't re-upload video when changing language
+- ✅ Faster iterations (skip completed steps)
+- ✅ Save API costs
+- ✅ Experiment with different parameters easily
+
+---
+
+## 🎬 PHASE 7: FFMPEG PROGRESS TRACKING (Medium Priority)
+**Status:** Complex but valuable  
+**Time Estimate:** 2-3 hours
+
+### Problem
+Scene detection shows no progress:
+```
+🎬 Detecting scenes...
+(long wait with no feedback)
+✓ Detected 12 scenes (45.2s)
+```
+
+### Solution: Parse FFmpeg Output
+
+#### A. Get Total Frame Count (15 minutes)
+```bash
+ffprobe -v error -select_streams v:0 -count_packets \
+  -show_entries stream=nb_read_packets -of csv=p=0 video.mp4
+```
+
+#### B. Parse FFmpeg stderr (1 hour)
+```javascript
+const ffmpeg = spawn('ffmpeg', [...]);
+const totalFrames = getTotalFrames(videoPath);
+
+ffmpeg.stderr.on('data', (data) => {
+  const match = data.toString().match(/frame=\s*(\d+)/);
+  if (match) {
+    const progress = (parseInt(match[1]) / totalFrames * 100).toFixed(1);
+    console.log(`Progress: ${progress}%`);
+  }
+});
+```
+
+#### C. Real-Time Updates (1 hour)
+- [ ] Implement Server-Sent Events (SSE) for progress
+- [ ] Endpoint: GET `/api/progress/:videoId`
+- [ ] Client: `EventSource` to receive updates
+- [ ] Update analyze page with progress bar
+- [ ] Show: "Detecting scenes: 45% (frame 1234/2748)"
+- [ ] ETA calculation based on FPS
+
+#### D. UI Progress Bar (30 minutes)
+- [ ] Add progress bar component
+- [ ] Color-code by stage (blue=detection, green=extraction, etc.)
+- [ ] Show current operation and percentage
+- [ ] Smooth animations
+
+---
+
+## 📋 IMPLEMENTATION PRIORITY
+
+| Phase | Feature | Priority | Time | Complexity | Status |
+|-------|---------|----------|------|------------|--------|
+| 4 | Clickable URLs/emails | High | 30min | Low | ⏳ Next |
+| 4 | Field type separation | High | 1hr | Low | ⏳ Next |
+| 5 | Cookie ownership | High | 1hr | Medium | ⏳ Ready |
+| 5 | Edit capability | Medium | 1.5hr | Medium | ⏳ Planned |
+| 5 | Delete capability | High | 30min | Medium | ⏳ Planned |
+| 6 | Processing pipeline | High | 5-6hr | High | ⏳ Planned |
+| 7 | FFmpeg progress | Medium | 2-3hr | High | ⏳ Future |
+
+**Total Time:** 11-14 hours
+
+---
+
+## 🎯 INCREMENTAL WORKFLOW
+
+### Session 1: Text Enhancement (1-2 hours)
+1. Implement clickable URLs and emails
+2. Add field type separation (names, scripts, etc.)
+3. Test on existing videos
+4. Deploy to production
+
+**Outcome:** Better text readability and usability
+
+### Session 2: Ownership (2-3 hours)
+1. Cookie-based ownership tracking
+2. Edit capability for owned videos
+3. Delete capability with confirmation
+4. Test with multiple "users" (different browsers)
+5. Deploy to production
+
+**Outcome:** User control over their videos
+
+### Session 3: Pipeline Refactor (5-6 hours)
+1. Add processing state to JSON structure
+2. Create reprocessing endpoints
+3. Add UI controls for step selection
+4. Test reprocessing from different steps
+5. Deploy to production
+
+**Outcome:** Flexible re-processing without re-uploading
+
+### Session 4: Progress Tracking (2-3 hours)
+1. Implement FFmpeg progress parsing
+2. Add SSE for real-time updates
+3. Create progress bar UI
+4. Test with long videos
+5. Deploy to production
+
+**Outcome:** User sees real-time progress
+
+---
+
+## 🐛 KNOWN ISSUES TO ADDRESS
+
+### Issue 1: Frontend/Backend Desync
+**Problem:** Analyze page shows fake progress while backend processes
+
+**Root Cause:**
+```
+Frontend: Upload → fake "Detecting" → fake "Extracting" → Timeout ❌
+Backend:  Upload → (waiting) → Detecting → Extracting → Complete ✅
+```
+
+**Solution:** Phase 7 (SSE progress) will fix this
+
+### Issue 2: Scene Detection Timeouts on Long Videos
+**Problem:** Videos > 1 hour may timeout
+
+**Solution:**
+- Add duration check on upload
+- Warn if > 60 minutes
+- Consider chunked processing
+
+### Issue 3: Concurrent Uploads
+**Problem:** Multiple simultaneous uploads may overload server
+
+**Solution:**
+- Add upload queue system
+- Limit concurrent ffmpeg processes
+- Show queue position to user
+
+---
+
+## 📝 REMAINING TASKS (Original List)
 
 ### Future Improvements
 - [ ] **Multiple test videos per domain**
@@ -242,6 +561,13 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [ ] Integrate multiple Gemini model variants (gemini-2.5-flash)
 - [ ] Add feedback scoring UI
 - [ ] Post demo to X for "Viral on X" prize
+- [ ] Batch video upload (multiple files)
+- [ ] Export scenes to JSON/CSV/PDF
+- [ ] Share videos with unique URLs
+- [ ] Public vs private videos
+- [ ] Video statistics dashboard
+- [ ] Search across all videos
+- [ ] Tags/categories for videos
 
 ---
 
