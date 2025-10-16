@@ -94,30 +94,50 @@ const upload = multer({
  * POST /api/upload
  * Upload a video file
  */
-router.post('/upload', upload.single('video'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No video file uploaded' });
-    }
+router.post('/upload', (req, res) => {
+  upload.single('video')(req, res, async (err) => {
+    try {
+      // Handle multer errors
+      if (err) {
+        log.error(`Multer upload error: ${err.message}`);
+        
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(413).json({ error: 'File too large. Maximum size is 200MB.' });
+        }
+        
+        if (err.message && err.message.includes('Only video files')) {
+          return res.status(400).json({ error: err.message });
+        }
+        
+        return res.status(500).json({ error: err.message || 'Upload failed' });
+      }
+      
+      if (!req.file) {
+        log.error('Upload failed: No video file in request');
+        return res.status(400).json({ error: 'No video file uploaded' });
+      }
 
-    const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
-    
-    // Generate thumbnail for uploaded video (async, don't wait)
-    const { generateThumbnail } = require('../utils/thumbnailGenerator');
-    generateThumbnail(videoId).catch(err => {
-      log.warn(`Failed to generate thumbnail for ${videoId}: ${err.message}`);
-    });
-    
-    res.json({
-      success: true,
-      videoId,
-      filename: req.file.filename,
-      size: req.file.size,
-      path: req.file.path,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+      const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
+      log.info(`Video uploaded: ${videoId} (${(req.file.size / (1024 * 1024)).toFixed(2)} MB)`);
+      
+      // Generate thumbnail for uploaded video (async, don't wait)
+      const { generateThumbnail } = require('../utils/thumbnailGenerator');
+      generateThumbnail(videoId).catch(err => {
+        log.warn(`Failed to generate thumbnail for ${videoId}: ${err.message}`);
+      });
+      
+      res.json({
+        success: true,
+        videoId,
+        filename: req.file.filename,
+        size: req.file.size,
+        path: req.file.path,
+      });
+    } catch (error) {
+      log.error(`Upload error: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
 });
 
 /**
