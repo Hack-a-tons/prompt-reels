@@ -5,7 +5,7 @@ const fs = require('fs');
 const config = require('../config');
 const { log } = require('../utils/logger');
 const { processVideo } = require('../core/videoProcessor');
-const { describeImage, describeScene } = require('../core/gemini');
+const { describeImage, describeScene, formatTranscript } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
@@ -420,6 +420,33 @@ router.post('/detect-scenes', async (req, res) => {
         }
         
         console.log(`✓ Audio transcription complete\n`);
+        
+        // Step 2.5: Format transcripts for better readability
+        if (scenes.some(s => s.transcript)) {
+          console.log(`\n📝 Formatting transcripts for readability...`);
+          
+          for (let i = 0; i < scenes.length; i++) {
+            const scene = scenes[i];
+            
+            if (scene.transcript && scene.transcript.text) {
+              try {
+                const formattedText = await formatTranscript(
+                  scene.transcript.text,
+                  targetLang
+                );
+                
+                scene.transcript.formattedText = formattedText;
+                console.log(`  ✓ Scene ${scene.sceneId}: Formatted`);
+              } catch (error) {
+                console.error(`  ✗ Failed to format scene ${scene.sceneId}:`, error.message);
+                // Keep original text if formatting fails
+                scene.transcript.formattedText = scene.transcript.text;
+              }
+            }
+          }
+          
+          console.log(`✓ Transcript formatting complete\n`);
+        }
       }
       
       // Step 3: Describe scenes ONCE in the correct language
@@ -887,20 +914,19 @@ router.get('/scenes/:videoId', (req, res) => {
       line-height: 1.6;
       color: #e7e9ea;
     }
-    .transcript {
-      margin-top: 15px;
-      padding: 15px;
-      background: #0f1419;
-      border-left: 4px solid #10b981;
-      border-radius: 4px;
-      font-size: 0.95em;
-      line-height: 1.6;
+    .description strong {
       color: #e7e9ea;
+      font-weight: 700;
+    }
+    .description em {
+      color: #1d9bf0;
+      font-style: italic;
     }
     .transcript-label {
       font-weight: bold;
       color: #10b981;
       margin-bottom: 8px;
+      display: block;
     }
     .no-frames {
       text-align: center;
@@ -988,8 +1014,16 @@ router.get('/scenes/:videoId', (req, res) => {
           
           ${scene.transcript ? `
             <div class="description" style="border-left-color: #10b981; background: rgba(16, 185, 129, 0.05);">
-              <strong>🎙️ Dialogue:</strong> "${scene.transcript.text}"
-              <div style="margin-top: 8px; font-size: 0.85em; color: #999;">
+              <strong>🎙️ Dialogue:</strong>
+              <div style="margin-top: 12px; line-height: 1.8; white-space: pre-wrap;">
+                ${(scene.transcript.formattedText || scene.transcript.text)
+                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                  .replace(/\n\n/g, '</p><p style="margin: 12px 0;">')
+                  .replace(/^(.+)$/m, '<p style="margin: 12px 0;">$1</p>')
+                }
+              </div>
+              <div style="margin-top: 12px; font-size: 0.85em; color: #999;">
                 Duration: ${scene.transcript.duration.toFixed(1)}s
               </div>
             </div>

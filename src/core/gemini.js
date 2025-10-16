@@ -211,15 +211,98 @@ Do NOT start with phrases like "In this scene" or "This scene shows". Just descr
 };
 
 /**
+ * Format transcript text to make it more readable
+ * Adds proper punctuation, capitalization, paragraph breaks, and emphasis
+ * @param {string} text - Raw transcript text
+ * @param {string} language - Language of the text (e.g., "Russian", "English")
+ * @returns {Promise<string>} Formatted text with markdown
+ */
+const formatTranscript = async (text, language = 'English') => {
+  if (!text || text.length < 10) {
+    return text;
+  }
+  
+  try {
+    const languageInstruction = language.toLowerCase() !== 'english' 
+      ? `The text is in ${language}. Keep all output in ${language}.`
+      : '';
+    
+    const prompt = `Format this transcript dialogue to make it highly readable. Apply these improvements:
+
+1. **Sentence Structure**: Split into proper sentences with correct punctuation
+2. **Capitalization**: Capitalize sentence starts, names, and proper nouns
+3. **Paragraph Breaks**: Add line breaks (\\n\\n) between distinct topics or speakers
+4. **Emphasis**: Use *italic* for emotional emphasis or **bold** for speaker names/important terms
+5. **Readability**: Keep natural flow, remove filler words if excessive
+
+${languageInstruction}
+
+Original transcript:
+${text}
+
+Return ONLY the formatted text with markdown. No explanations or metadata.`;
+
+    if (currentProvider === 'azure') {
+      if (!azureClient) {
+        return text; // Fallback to original if Azure not available
+      }
+      
+      const response = await azureClient.chat.completions.create({
+        model: config.azureOpenAI.deploymentName,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0.3, // Lower temperature for more consistent formatting
+      });
+      
+      return response.choices[0].message.content.trim();
+    } else {
+      // Use Gemini
+      if (!geminiClient) {
+        return text; // Fallback to original if Gemini not available
+      }
+      
+      const model = geminiClient.getGenerativeModel({ 
+        model: config.geminiModel,
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 1000,
+        }
+      });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim();
+    }
+  } catch (error) {
+    console.error(`Error formatting transcript: ${error.message}`);
+    return text; // Return original text on error
+  }
+};
+
+/**
  * Generate embeddings using hash-based similarity
  * (No real embeddings to keep it simple)
  */
 const generateEmbedding = async (text) => {
   // Use simple hash-based representation
-  return Array.from({length: 1536}, (_, i) => {
-    const hash = text.split('').reduce((a, c) => ((a << 5) - a) + c.charCodeAt(0), i);
-    return (hash % 1000) / 1000;
-  });
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    hash = hash & hash;
+  }
+  
+  // Convert to array of pseudo-embeddings
+  const embedding = [];
+  for (let i = 0; i < 10; i++) {
+    embedding.push((hash >> i) % 100 / 100);
+  }
+  
+  return embedding;
 };
 
 /**
@@ -270,6 +353,7 @@ initClients();
 module.exports = {
   describeImage,
   describeScene,
+  formatTranscript,
   generateEmbedding,
   cosineSimilarity,
   getCurrentProvider,
