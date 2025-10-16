@@ -866,6 +866,31 @@ app.get('/videos', (req, res) => {
         </table>
         `}
     </div>
+    
+    <script>
+        // Auto-play videos when they come into view
+        document.addEventListener('DOMContentLoaded', () => {
+            const videos = document.querySelectorAll('.video-preview');
+            
+            // Try to play all videos immediately
+            videos.forEach(video => {
+                video.play().catch(() => {
+                    // Autoplay failed, use intersection observer
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                entry.target.play().catch(() => {});
+                            } else {
+                                entry.target.pause();
+                            }
+                        });
+                    }, { threshold: 0.5 });
+                    
+                    observer.observe(video);
+                });
+            });
+        });
+    </script>
 </body>
 </html>
   `;

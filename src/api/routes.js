@@ -120,9 +120,14 @@ router.post('/upload', (req, res) => {
       const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
       log.info(`Video uploaded: ${videoId} (${(req.file.size / (1024 * 1024)).toFixed(2)} MB)`);
       
-      // Generate thumbnail for uploaded video (async, don't wait)
-      const { generateThumbnail } = require('../utils/thumbnailGenerator');
-      generateThumbnail(videoId).catch(err => {
+      // Generate thumbnail for uploaded video and check for orphaned videos (async, don't wait)
+      const { generateThumbnail, generateAllThumbnails } = require('../utils/thumbnailGenerator');
+      generateThumbnail(videoId).then(() => {
+        // After generating this thumbnail, check for any other videos missing thumbnails
+        generateAllThumbnails().catch(err => {
+          log.warn(`Failed to generate orphaned thumbnails: ${err.message}`);
+        });
+      }).catch(err => {
         log.warn(`Failed to generate thumbnail for ${videoId}: ${err.message}`);
       });
       
@@ -371,10 +376,10 @@ router.post('/detect-scenes', async (req, res) => {
             
             const transcript = await transcribeSceneAudio(
               videoPath,
+              scene.sceneId,
               scene.start,
               scene.end,
-              videoId,
-              scene.sceneId
+              videoId
             );
             
             if (transcript && transcript.text && transcript.text.trim()) {
@@ -628,7 +633,7 @@ router.get('/scenes/:videoId', (req, res) => {
       const uploadFiles = fs.readdirSync(config.uploadDir)
         .filter(f => f.startsWith(videoId) && f.endsWith('.mp4'));
       videoPath = uploadFiles.length > 0 ? `uploads/${uploadFiles[0]}` : `uploads/${videoId}.mp4`;
-      backLink = '/analyze';
+      backLink = '/videos';
     }
     
     // Helper function for time formatting

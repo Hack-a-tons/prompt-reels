@@ -25,6 +25,7 @@ async function generateThumbnail(videoId) {
     
     const thumbnailsDir = path.join(config.uploadDir, 'thumbnails');
     const thumbnailPath = path.join(thumbnailsDir, `${videoId}.mp4`);
+    const lockPath = path.join(thumbnailsDir, `${videoId}.lock`);
     
     // Check if video exists
     if (!fs.existsSync(videoPath)) {
@@ -38,11 +39,25 @@ async function generateThumbnail(videoId) {
       return resolve(true);
     }
     
+    // Check if another process is generating this thumbnail
+    if (fs.existsSync(lockPath)) {
+      const lockAge = Date.now() - fs.statSync(lockPath).mtimeMs;
+      if (lockAge < 300000) { // 5 minutes
+        console.log(`⏸️  Thumbnail generation in progress: ${videoId}`);
+        return resolve(false);
+      } else {
+        // Stale lock file, remove it
+        fs.unlinkSync(lockPath);
+      }
+    }
+    
     // Create thumbnails directory if it doesn't exist
     if (!fs.existsSync(thumbnailsDir)) {
       fs.mkdirSync(thumbnailsDir, { recursive: true });
     }
     
+    // Create lock file
+    fs.writeFileSync(lockPath, Date.now().toString());
     console.log(`🎬 Generating thumbnail for: ${videoId}`);
     
     // ffmpeg command to generate thumbnail
@@ -53,6 +68,11 @@ async function generateThumbnail(videoId) {
     const cmd = `ffmpeg -i "${videoPath}" -t 5 -vf "scale=480:-2" -b:v 400k -an -preset fast -y "${thumbnailPath}" -hide_banner -loglevel error`;
     
     exec(cmd, (error, stdout, stderr) => {
+      // Clean up lock file
+      if (fs.existsSync(lockPath)) {
+        fs.unlinkSync(lockPath);
+      }
+      
       if (error) {
         console.error(`❌ Thumbnail generation failed for ${videoId}:`, error.message);
         return resolve(false);
