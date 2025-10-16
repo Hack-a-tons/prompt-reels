@@ -171,7 +171,7 @@ router.post('/analyze', async (req, res) => {
  */
 router.post('/detect-scenes', async (req, res) => {
   try {
-    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false } = req.body;
+    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false, transcribeAudio = false } = req.body;
     
     if (!videoId) {
       return res.status(400).json({ error: 'videoId is required' });
@@ -229,6 +229,38 @@ router.post('/detect-scenes', async (req, res) => {
         }
         
         console.log(`✓ Scene descriptions complete\n`);
+      }
+      
+      // Optionally transcribe audio for each scene
+      if (transcribeAudio) {
+        console.log(`\n🎙️ Transcribing audio...`);
+        
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
+          
+          try {
+            console.log(`  Transcribing scene ${scene.sceneId}...`);
+            
+            const transcript = await transcribeSceneAudio(
+              videoPath,
+              scene.start,
+              scene.end,
+              videoId,
+              scene.sceneId
+            );
+            
+            if (transcript && transcript.text && transcript.text.trim()) {
+              scene.transcript = transcript;
+              console.log(`  ✓ Scene ${scene.sceneId}: "${transcript.text.substring(0, 50)}..."`);
+            } else {
+              console.log(`  - Scene ${scene.sceneId}: No speech detected`);
+            }
+          } catch (error) {
+            console.error(`  ✗ Failed to transcribe scene ${scene.sceneId}:`, error.message);
+          }
+        }
+        
+        console.log(`✓ Audio transcription complete\n`);
       }
     }
 
@@ -476,6 +508,38 @@ router.get('/scenes/:videoId', (req, res) => {
     .back-link:hover {
       opacity: 1;
     }
+    .created-with {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
+    .created-with a {
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+      transition: border-color 0.2s;
+    }
+    .created-with a:hover {
+      border-bottom-color: white;
+    }
+    .footer {
+      background: #16181c;
+      border-top: 1px solid #2f3336;
+      padding: 20px;
+      text-align: center;
+      margin-top: 40px;
+    }
+    .footer .created-with {
+      color: #71767b;
+    }
+    .footer .created-with a {
+      color: #1d9bf0;
+      border-bottom-color: rgba(29, 155, 240, 0.3);
+    }
+    .footer .created-with a:hover {
+      border-bottom-color: #1d9bf0;
+    }
     .header h1 {
       font-size: 2em;
       margin-bottom: 10px;
@@ -653,9 +717,14 @@ router.get('/scenes/:videoId', (req, res) => {
 </head>
 <body>
   <div class="header">
-    <a href="${backLink}" class="back-link">← Back</a>
+    ${videoId.startsWith('article-') ? `
+      <a href="${backLink}" class="back-link">← Back</a>
+    ` : ''}
     <h1>🎬 Scene Viewer</h1>
     <p>Video ID: ${videoId}</p>
+    ${!videoId.startsWith('article-') ? `
+      <p class="created-with">Created with <a href="https://reels.hurated.com/analyze">reels.hurated.com/analyze</a></p>
+    ` : ''}
   </div>
 
   <div class="container">
@@ -728,6 +797,12 @@ router.get('/scenes/:videoId', (req, res) => {
       `).join('')}
     </div>
   </div>
+
+  ${!videoId.startsWith('article-') ? `
+    <div class="footer">
+      <p class="created-with">Created with <a href="https://reels.hurated.com/analyze">reels.hurated.com/analyze</a></p>
+    </div>
+  ` : ''}
 
   <script>
     function formatTime(seconds) {

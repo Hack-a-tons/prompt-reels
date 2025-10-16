@@ -277,7 +277,9 @@ app.get('/analyze', (req, res) => {
             </div>
         </div>
 
-        <a href="/" class="back-link">← Back to Dashboard</a>
+        <a href="/videos" class="back-link">📹 My Videos</a>
+        <span style="margin: 0 10px; color: #667eea;">|</span>
+        <a href="/" class="back-link">← Dashboard</a>
     </div>
 
     <script>
@@ -394,17 +396,47 @@ app.get('/analyze', (req, res) => {
             const formData = new FormData();
             formData.append('video', file);
 
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                // Track upload progress
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        const uploadPercent = Math.min(25, percentComplete * 0.25); // Upload is first 25% of total progress
+                        updateProgress(uploadPercent, 1);
+                    }
+                });
+                
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            resolve(response);
+                        } catch (error) {
+                            reject(new Error('Invalid response from server'));
+                        }
+                    } else {
+                        try {
+                            const error = JSON.parse(xhr.responseText);
+                            reject(new Error(error.error || 'Upload failed'));
+                        } catch {
+                            reject(new Error('Upload failed'));
+                        }
+                    }
+                });
+                
+                xhr.addEventListener('error', () => {
+                    reject(new Error('Network error during upload'));
+                });
+                
+                xhr.addEventListener('abort', () => {
+                    reject(new Error('Upload cancelled'));
+                });
+                
+                xhr.open('POST', '/api/upload');
+                xhr.send(formData);
             });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Upload failed');
-            }
-
-            return response.json();
         }
 
         async function detectScenes(videoId) {
@@ -415,7 +447,8 @@ app.get('/analyze', (req, res) => {
                     videoId,
                     threshold: 0.4,
                     extractFrames: true,
-                    describeScenes: true
+                    describeScenes: true,
+                    transcribeAudio: true
                 })
             });
 
@@ -447,6 +480,239 @@ app.get('/analyze', (req, res) => {
             errorDiv.style.display = 'block';
         }
     </script>
+</body>
+</html>
+  `;
+  
+  res.send(html);
+});
+
+// Videos listing page
+app.get('/videos', (req, res) => {
+  const outputDir = require('./config').outputDir;
+  
+  // Get all scene files for user uploads (video-*)
+  const videos = [];
+  if (fs.existsSync(outputDir)) {
+    const sceneFiles = fs.readdirSync(outputDir)
+      .filter(f => f.startsWith('video-') && f.endsWith('_scenes.json'));
+    
+    for (const file of sceneFiles) {
+      try {
+        const scenePath = path.join(outputDir, file);
+        const sceneData = JSON.parse(fs.readFileSync(scenePath, 'utf8'));
+        
+        videos.push({
+          videoId: sceneData.videoId,
+          sceneCount: sceneData.sceneCount,
+          threshold: sceneData.threshold,
+          timestamp: sceneData.timestamp,
+          hasScenes: sceneData.scenes && sceneData.scenes.length > 0,
+          hasDescriptions: sceneData.scenes && sceneData.scenes.some(s => s.description),
+          hasTranscripts: sceneData.scenes && sceneData.scenes.some(s => s.transcript),
+        });
+      } catch (error) {
+        console.error(`Error reading ${file}:`, error.message);
+      }
+    }
+  }
+  
+  // Sort by timestamp, newest first
+  videos.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uploaded Videos - Prompt Reels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e7e9ea;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 { font-size: 32px; margin: 0; }
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            background: #1d9bf0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 9999px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background: #1a8cd8;
+        }
+        .btn.secondary {
+            background: #2f3336;
+        }
+        .btn.secondary:hover {
+            background: #3a3f44;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: #16181c;
+            border: 1px solid #2f3336;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #1d9bf0;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            color: #71767b;
+            font-size: 14px;
+        }
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            background: #16181c;
+            border: 1px solid #2f3336;
+            border-radius: 12px;
+        }
+        .empty h2 {
+            color: #71767b;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #16181c;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid #2f3336;
+        }
+        th {
+            background: #1d1f23;
+            color: #71767b;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        tr:hover {
+            background: #1a1c1f;
+        }
+        .video-id {
+            color: #1d9bf0;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .video-id:hover {
+            text-decoration: underline;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge.yes {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+        .badge.no {
+            background: rgba(113, 118, 123, 0.2);
+            color: #71767b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📹 Uploaded Videos</h1>
+            <div class="nav-buttons">
+                <a href="/analyze" class="btn">+ Upload New Video</a>
+                <a href="/" class="btn secondary">← Articles Dashboard</a>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">${videos.length}</div>
+                <div class="stat-label">Total Videos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${videos.filter(v => v.hasDescriptions).length}</div>
+                <div class="stat-label">With Descriptions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${videos.filter(v => v.hasTranscripts).length}</div>
+                <div class="stat-label">With Transcripts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">${videos.reduce((sum, v) => sum + v.sceneCount, 0)}</div>
+                <div class="stat-label">Total Scenes</div>
+            </div>
+        </div>
+        
+        ${videos.length === 0 ? `
+        <div class="empty">
+            <h2>No videos uploaded yet</h2>
+            <p style="color: #71767b; margin-bottom: 20px;">Upload your first video to get started</p>
+            <a href="/analyze" class="btn">Upload Video</a>
+        </div>
+        ` : `
+        <table>
+            <thead>
+                <tr>
+                    <th>Video ID</th>
+                    <th>Scenes</th>
+                    <th>Descriptions</th>
+                    <th>Transcripts</th>
+                    <th>Uploaded</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${videos.map(video => `
+                <tr>
+                    <td><a href="/api/scenes/${video.videoId}" class="video-id">${video.videoId}</a></td>
+                    <td>${video.sceneCount}</td>
+                    <td><span class="badge ${video.hasDescriptions ? 'yes' : 'no'}">${video.hasDescriptions ? 'Yes' : 'No'}</span></td>
+                    <td><span class="badge ${video.hasTranscripts ? 'yes' : 'no'}">${video.hasTranscripts ? 'Yes' : 'No'}</span></td>
+                    <td>${new Date(video.timestamp).toLocaleString()}</td>
+                    <td><a href="/api/scenes/${video.videoId}" class="btn" style="padding: 6px 16px; font-size: 13px;">View</a></td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        `}
+    </div>
 </body>
 </html>
   `;
@@ -625,7 +891,8 @@ app.get('/', (req, res) => {
         <div class="header">
             <h1>🎬 Prompt Reels - Article Dashboard</h1>
             <div style="display: flex; gap: 15px; align-items: center;">
-                <a href="/analyze" class="add-articles-btn" style="text-decoration: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📹 Analyze Video</a>
+                <a href="/videos" class="add-articles-btn" style="text-decoration: none; background: #2f3336;">📹 My Videos</a>
+                <a href="/analyze" class="add-articles-btn" style="text-decoration: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">➕ Upload Video</a>
                 <a href="/prompts" class="add-articles-btn" style="text-decoration: none; background: #2f3336;">🧠 View Prompts</a>
                 <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()" style="display: none;">
                     + Add 10 Articles
