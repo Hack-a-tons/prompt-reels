@@ -437,12 +437,30 @@ app.get('/analyze', (req, res) => {
 
                 // Step 2: Detect scenes with frames extraction and descriptions
                 updateProgress(25, 2, 'Detecting scenes...');
-                const sceneResult = await detectScenes(videoId, language);
                 
-                // Step 3: Extraction and descriptions
-                updateProgress(50, 3, 'Extracting frames...');
-                updateProgress(75, 3, 'Generating descriptions...');
-                updateProgress(100, 4, 'Complete!');
+                // Start progress animation while waiting for server response
+                let progressPercent = 25;
+                const progressInterval = setInterval(() => {
+                    if (progressPercent < 95) {
+                        progressPercent += 2;
+                        const step = progressPercent < 40 ? 2 : progressPercent < 70 ? 3 : 4;
+                        const message = progressPercent < 40 ? 'Detecting scenes...' : 
+                                      progressPercent < 60 ? 'Extracting frames...' : 
+                                      'Generating descriptions...';
+                        updateProgress(progressPercent, step, message);
+                    }
+                }, 2000); // Update every 2 seconds
+                
+                try {
+                    const sceneResult = await detectScenes(videoId, language);
+                    clearInterval(progressInterval);
+                    
+                    // Complete
+                    updateProgress(100, 4, 'Complete!');
+                } catch (error) {
+                    clearInterval(progressInterval);
+                    throw error;
+                }
 
                 // Redirect to scene viewer
                 setTimeout(() => {
