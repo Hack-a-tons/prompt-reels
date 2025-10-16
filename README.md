@@ -388,6 +388,152 @@ npm run reset-prompts     # Reset prompts.json to clean template
 ```
 **Note:** `data/prompts.json` accumulates performance history during FPO runs. Reset it before committing if you want a clean state.
 
+### Analyze Your Own Videos 🎬
+
+**NEW!** Upload and analyze your own videos with automatic scene detection and AI descriptions.
+
+This feature transforms Prompt Reels into a **general-purpose video analysis platform** where anyone can upload videos and get AI-powered scene descriptions with permanent shareable URLs.
+
+---
+
+#### 🌐 Web Interface (Recommended)
+
+**Location**: `https://reels.hurated.com/analyze` (or `http://localhost:15000/analyze` for dev)
+
+**How it works**:
+1. Drag & drop your video or click to upload (max 200MB)
+2. See file info (name, size) with validation
+3. Click "Analyze Video" button
+4. Watch real-time progress through 4 steps:
+   - ⬆️ Uploading video
+   - 🎬 Detecting scenes
+   - 📸 Extracting frames
+   - 🤖 Generating AI descriptions
+5. Automatically redirected to **permanent scene viewer**
+6. Share the URL with anyone!
+
+**Features**:
+- Modern gradient design (purple theme)
+- Drag & drop + click to upload
+- Real-time progress tracking
+- Mobile-responsive
+- Automatic error handling
+
+---
+
+#### 💻 Command Line Interface
+
+```bash
+# Analyze video on production
+./scripts/analyze-video.sh video.mp4
+
+# Analyze on dev server
+./scripts/analyze-video.sh video.mp4 dev
+
+# Returns a permanent shareable URL like:
+# https://reels.hurated.com/api/scenes/video-1234567890
+```
+
+**Script features**:
+- 3-step automated process
+- Beautiful colored output
+- Supports both prod and dev servers
+- Returns permanent URL
+- Error handling with helpful messages
+
+---
+
+#### 📋 Processing Pipeline
+
+When you upload a video, the system automatically:
+
+1. **Upload** → Video saved to `uploads/` directory
+2. **Scene Detection** → ffmpeg detects scene changes (threshold: 0.4)
+3. **Frame Extraction** → 3 frames per scene (beginning/middle/end)
+4. **AI Descriptions** → Gemini/Azure OpenAI generates descriptions
+5. **Redirect** → Permanent results page
+
+---
+
+#### 🔗 Permanent Shareable URLs
+
+Every analyzed video gets a permanent URL:
+```
+https://reels.hurated.com/api/scenes/video-1234567890
+```
+
+**What you get**:
+- ✅ Video player with scene navigation
+- ✅ Scene thumbnails (3 frames each)
+- ✅ AI-generated descriptions for every scene
+- ✅ Clickable timestamps to jump to scenes
+- ✅ Auto-highlight current scene during playback
+- ✅ Same beautiful format as article videos
+
+---
+
+#### 🆚 Article Videos vs. User Videos
+
+| Feature | Articles | User Videos |
+|---------|----------|-------------|
+| **Video Source** | News articles via Tavily/BrowserBase | User upload |
+| **Upload Method** | Automatic fetch | Drag & drop / Click |
+| **Storage Path** | `uploads/articles/` | `uploads/` |
+| **Video ID** | `article-*` | `video-*` |
+| **Scene Viewer** | ✅ Same format | ✅ Same format |
+| **Permanent URL** | ✅ Yes | ✅ Yes |
+| **AI Descriptions** | ✅ Yes | ✅ Yes |
+| **Shareable** | ✅ Yes | ✅ Yes |
+
+---
+
+#### ✨ Key Benefits
+
+1. **User-Friendly**: Beautiful drag & drop interface
+2. **Automated**: Zero manual steps after upload
+3. **Shareable**: Every video gets permanent URL
+4. **Consistent**: Same format as article scene descriptions
+5. **Fast**: Progress tracking keeps users informed
+6. **Flexible**: Both web and CLI interfaces
+7. **Production-Ready**: Works on live server immediately
+
+---
+
+#### 🧪 Example Workflow
+
+```bash
+# 1. User uploads video via web interface
+# → https://reels.hurated.com/analyze
+
+# 2. System processes:
+# - Upload: video-1760400000000-123456.mp4
+# - Detect: 15 scenes found
+# - Extract: 45 frames (3 per scene)
+# - Describe: AI generates descriptions
+
+# 3. User redirected to:
+# → https://reels.hurated.com/api/scenes/video-1760400000000-123456
+
+# 4. User can now share this permanent URL!
+```
+
+---
+
+#### 🔧 Technical Details
+
+**Reuses existing infrastructure**:
+- Same scene detection logic (`sceneDetection.js`)
+- Same AI description engine (`gemini.js`)
+- Same scene viewer template
+- Same video player with range request support
+- Same storage structure in `output/`
+
+**New components**:
+- Upload interface at `/analyze`
+- Dynamic video path resolution
+- CLI automation tool (`analyze-video.sh`)
+- Enhanced scene viewer supporting both video types
+
 ### Cleanup (clear outputs and uploads)
 ```bash
 # Interactive (with confirmation)
@@ -536,6 +682,13 @@ See `nginx.conf.example` for full configuration. The main domain `reels.hurated.
 GET /health
 ```
 
+### Video Analysis Page (NEW! 🎬)
+```bash
+GET /analyze
+# Beautiful web interface for uploading and analyzing videos
+# Features drag & drop, progress tracking, and automatic redirect to results
+```
+
 ### Upload Video
 ```bash
 POST /api/upload
@@ -569,9 +722,10 @@ Response: Analysis results JSON
 POST /api/detect-scenes
 Content-Type: application/json
 Body: { 
-  videoId,              // Required: Video ID from upload
-  threshold: 0.4,       // Optional: Scene change sensitivity (0.0-1.0)
-  extractFrames: false  // Optional: Extract 3 frames per scene
+  videoId,               // Required: Video ID from upload
+  threshold: 0.4,        // Optional: Scene change sensitivity (0.0-1.0)
+  extractFrames: false,  // Optional: Extract 3 frames per scene
+  describeScenes: false  // Optional: Generate AI descriptions
 }
 Response: { 
   success, 

@@ -39,6 +39,421 @@ app.get('/health', (req, res) => {
 // API routes
 app.use('/api', routes);
 
+// Video Upload & Analysis page
+app.get('/analyze', (req, res) => {
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis - Prompt Reels</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 30px;
+            background: #f8f9ff;
+        }
+        .upload-area:hover {
+            background: #eef1ff;
+            border-color: #764ba2;
+            transform: translateY(-2px);
+        }
+        .upload-area.dragging {
+            background: #eef1ff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 10px;
+        }
+        .upload-text {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .upload-hint {
+            color: #666;
+            font-size: 0.9em;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+        }
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s;
+            border-radius: 10px;
+        }
+        .status {
+            text-align: center;
+            color: #666;
+            font-size: 1em;
+        }
+        .status-step {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f8f9ff;
+        }
+        .status-step.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+        }
+        .status-step.complete {
+            background: #10b981;
+            color: white;
+        }
+        .file-info {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .file-info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+        .file-info-label {
+            color: #666;
+        }
+        .file-info-value {
+            font-weight: bold;
+            color: #333;
+        }
+        .error {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: #fee;
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+            color: #dc2626;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎬 Video Analysis</h1>
+            <p class="subtitle">Upload a video to get AI-powered scene descriptions</p>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📹</div>
+            <div class="upload-text">Click to upload or drag and drop</div>
+            <div class="upload-hint">MP4, MOV, AVI, MKV, WebM (max 200MB)</div>
+            <input type="file" id="fileInput" accept="video/*">
+        </div>
+
+        <div class="file-info" id="fileInfo">
+            <div class="file-info-item">
+                <span class="file-info-label">File:</span>
+                <span class="file-info-value" id="fileName"></span>
+            </div>
+            <div class="file-info-item">
+                <span class="file-info-label">Size:</span>
+                <span class="file-info-value" id="fileSize"></span>
+            </div>
+        </div>
+
+        <button class="btn" id="analyzeBtn" disabled onclick="analyzeVideo()">
+            Analyze Video
+        </button>
+
+        <div class="error" id="error"></div>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="status" id="status">
+                <div class="status-step" id="step1">1. Uploading video...</div>
+                <div class="status-step" id="step2">2. Detecting scenes...</div>
+                <div class="status-step" id="step3">3. Extracting frames...</div>
+                <div class="status-step" id="step4">4. Generating descriptions...</div>
+            </div>
+        </div>
+
+        <a href="/" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    <script>
+        let selectedFile = null;
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const errorDiv = document.getElementById('error');
+
+        // Click to upload
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // File selection
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        });
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragging');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragging');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                handleFile(file);
+            } else {
+                showError('Please drop a video file');
+            }
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            
+            // Show file info
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            fileInfo.style.display = 'block';
+            
+            // Enable analyze button
+            analyzeBtn.disabled = false;
+            
+            // Update upload area text
+            uploadArea.querySelector('.upload-text').textContent = '✓ Video selected';
+            uploadArea.querySelector('.upload-icon').textContent = '✅';
+            
+            // Hide error
+            errorDiv.style.display = 'none';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        async function analyzeVideo() {
+            if (!selectedFile) {
+                showError('Please select a video file');
+                return;
+            }
+
+            // Check file size (200MB limit)
+            if (selectedFile.size > 200 * 1024 * 1024) {
+                showError('File too large. Maximum size is 200MB.');
+                return;
+            }
+
+            // Disable button and show progress
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<span class="spinner"></span>Processing...';
+            progressContainer.style.display = 'block';
+            errorDiv.style.display = 'none';
+
+            try {
+                // Step 1: Upload video
+                updateProgress(25, 1);
+                const uploadResult = await uploadVideo(selectedFile);
+                const videoId = uploadResult.videoId;
+
+                // Step 2: Detect scenes with frames extraction and descriptions
+                updateProgress(50, 2);
+                await detectScenes(videoId);
+
+                // Step 3 & 4: Extraction and descriptions happen in one API call
+                updateProgress(75, 3);
+                updateProgress(100, 4);
+
+                // Redirect to scene viewer
+                setTimeout(() => {
+                    window.location.href = '/api/scenes/' + videoId;
+                }, 1000);
+
+            } catch (error) {
+                showError(error.message || 'Analysis failed. Please try again.');
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Analyze Video';
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        async function uploadVideo(file) {
+            const formData = new FormData();
+            formData.append('video', file);
+
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Upload failed');
+            }
+
+            return response.json();
+        }
+
+        async function detectScenes(videoId) {
+            const response = await fetch('/api/detect-scenes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    videoId,
+                    threshold: 0.4,
+                    extractFrames: true,
+                    describeScenes: true
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Scene detection failed');
+            }
+
+            return response.json();
+        }
+
+        function updateProgress(percent, step) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            
+            // Update step status
+            for (let i = 1; i <= 4; i++) {
+                const stepEl = document.getElementById('step' + i);
+                stepEl.classList.remove('active', 'complete');
+                if (i < step) {
+                    stepEl.classList.add('complete');
+                } else if (i === step) {
+                    stepEl.classList.add('active');
+                }
+            }
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+  `;
+  
+  res.send(html);
+});
+
 // Dashboard HTML page
 app.get('/', (req, res) => {
   const { listArticles } = require('./core/articleWorkflow');
@@ -210,6 +625,7 @@ app.get('/', (req, res) => {
         <div class="header">
             <h1>🎬 Prompt Reels - Article Dashboard</h1>
             <div style="display: flex; gap: 15px; align-items: center;">
+                <a href="/analyze" class="add-articles-btn" style="text-decoration: none; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📹 Analyze Video</a>
                 <a href="/prompts" class="add-articles-btn" style="text-decoration: none; background: #2f3336;">🧠 View Prompts</a>
                 <button id="addArticlesBtn" class="add-articles-btn" onclick="addArticles()" style="display: none;">
                     + Add 10 Articles

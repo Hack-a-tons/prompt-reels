@@ -414,8 +414,23 @@ router.get('/scenes/:videoId', (req, res) => {
     }
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
-    // Use streaming endpoint for local videos (supports range requests)
-    const videoPath = `api/articles/${videoId}.mp4`;
+    
+    // Determine video path based on videoId type
+    // Articles: article-* → /api/articles/:id.mp4
+    // User uploads: video-* → /uploads/:filename.mp4
+    let videoPath;
+    let backLink = '/';
+    
+    if (videoId.startsWith('article-')) {
+      videoPath = `api/articles/${videoId}.mp4`;
+      backLink = `/articles/${videoId}`;
+    } else {
+      // Find the actual video file for user uploads
+      const uploadFiles = fs.readdirSync(config.uploadDir)
+        .filter(f => f.startsWith(videoId) && f.endsWith('.mp4'));
+      videoPath = uploadFiles.length > 0 ? `uploads/${uploadFiles[0]}` : `uploads/${videoId}.mp4`;
+      backLink = '/analyze';
+    }
     
     // Helper function for time formatting
     const formatTime = (seconds) => {
@@ -638,7 +653,7 @@ router.get('/scenes/:videoId', (req, res) => {
 </head>
 <body>
   <div class="header">
-    <a href="/articles/${videoId}" class="back-link">← Back to Article</a>
+    <a href="${backLink}" class="back-link">← Back</a>
     <h1>🎬 Scene Viewer</h1>
     <p>Video ID: ${videoId}</p>
   </div>
