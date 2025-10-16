@@ -34,8 +34,10 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Scene JSON API** - Structured data for programmatic access
 - [x] **Static file serving** - Videos and frames accessible via URL
 
-### News Article Fetching ✨ NEW
+### News Article Fetching ✨
 - [x] **Tavily integration** - Search for news articles with videos
+- [x] **Automatic RSS fallback** - Falls back to 13 RSS feeds when Tavily fails
+- [x] **Manual URL input** - Fetch specific articles via URL (`fetch-from-url.sh`)
 - [x] **BrowserBase integration** - Extract video URLs from articles
 - [x] **Automatic video download** - Direct video downloads to `uploads/articles/`
 - [x] **Rich metadata** - Article title, text, source, timestamps
@@ -111,6 +113,8 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 - [x] **Auto-thumbnail generation** - Created automatically on video download
 - [x] **Thumbnail fallback** - Uses full video if thumbnail doesn't exist
 - [x] **generate-thumbnails.sh** - Script to create thumbnails for existing videos
+- [x] **Upload retry with exponential backoff** - 3 automatic retries on network failure
+- [x] **60-second timeout detection** - Catches stalled connections during upload
 
 ### FPO Improvements
 - [x] **Automatic FPO on rating** - Runs when articles rated
@@ -270,6 +274,33 @@ A self-improving video analysis system with **scene detection**, **AI-powered de
 
 ### Nodemon Configuration
 Ignores: `data/`, `uploads/`, `output/` to prevent restarts during processing
+
+### Storage Locations
+- **User uploaded videos**: `./uploads/` (format: `video-{timestamp}-{random}.mp4`)
+- **Article videos**: `./uploads/articles/` (format: `article-{timestamp}-{random}.mp4`)
+- **Scene data**: `./output/` (scene detection results, frames)
+- **Prompt data**: `./data/prompts.json` (FPO optimization state)
+- **Environment**: `UPLOAD_DIR`, `OUTPUT_DIR`, `DATA_DIR` in config
+
+### API Logging
+All API calls logged with:
+- **Format**: `[icon] YYYY-MM-DD HH:MM:SS IP METHOD PATH → STATUS TIME`
+- **Icons**: ✓ (2xx), ↪️ (3xx), ⚠️ (4xx), ❌ (5xx)
+- **IP Detection**: X-Forwarded-For, X-Real-IP, or socket (works behind nginx)
+- **Excluded**: `/health`, static files (`/uploads/*`, `/output/*`)
+- **Max line**: 140 characters
+
+### Tavily Alternatives
+When Tavily API hits limits (HTTP 432):
+1. **Automatic RSS fallback** - 13 major news sources (CNN, NBC, BBC, etc.)
+2. **Manual URL input** - `./scripts/fetch-from-url.sh <URL>` or POST `/api/fetch-from-url`
+3. **RSS sources**: Free, no API keys needed, gets latest news from major outlets
+
+### Recent Bug Fixes
+- **Fixed** `/videos` page error - Added missing `fs` module import
+- **Added** upload retry logic - 3 attempts with exponential backoff (2s, 4s, 8s)
+- **Added** 60-second timeout detection for stalled uploads
+- **Added** network error recovery with user-friendly retry messages
 
 ---
 

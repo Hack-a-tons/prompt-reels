@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 const routes = require('./api/routes');
 const { initWeave } = require('./core/weave');
@@ -393,50 +394,92 @@ app.get('/analyze', (req, res) => {
         }
 
         async function uploadVideo(file) {
-            const formData = new FormData();
-            formData.append('video', file);
+            const maxRetries = 3;
+            const retryDelay = 2000; // Start with 2 seconds
+            
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const formData = new FormData();
+                    formData.append('video', file);
 
-            return new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                
-                // Track upload progress
-                xhr.upload.addEventListener('progress', (e) => {
-                    if (e.lengthComputable) {
-                        const percentComplete = (e.loaded / e.total) * 100;
-                        const uploadPercent = Math.min(25, percentComplete * 0.25); // Upload is first 25% of total progress
-                        updateProgress(uploadPercent, 1);
+                    const result = await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        
+                        // Track upload progress
+                        xhr.upload.addEventListener('progress', (e) => {
+                            if (e.lengthComputable) {
+                                const percentComplete = (e.loaded / e.total) * 100;
+                                const uploadPercent = Math.min(25, percentComplete * 0.25); // Upload is first 25% of total progress
+                                updateProgress(uploadPercent, 1);
+                            }
+                        });
+                        
+                        xhr.addEventListener('load', () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                try {
+                                    const response = JSON.parse(xhr.responseText);
+                                    resolve(response);
+                                } catch (error) {
+                                    reject(new Error('Invalid response from server'));
+                                }
+                            } else {
+                                try {
+                                    const error = JSON.parse(xhr.responseText);
+                                    reject(new Error(error.error || 'Upload failed'));
+                                } catch {
+                                    reject(new Error('Upload failed'));
+                                }
+                            }
+                        });
+                        
+                        xhr.addEventListener('error', () => {
+                            reject(new Error('Network error during upload'));
+                        });
+                        
+                        xhr.addEventListener('abort', () => {
+                            reject(new Error('Upload cancelled'));
+                        });
+                        
+                        // Set timeout for detecting stalled connections
+                        xhr.timeout = 60000; // 60 seconds timeout
+                        xhr.addEventListener('timeout', () => {
+                            reject(new Error('Upload timeout - connection may be lost'));
+                        });
+                        
+                        xhr.open('POST', '/api/upload');
+                        xhr.send(formData);
+                    });
+                    
+                    // Success - return result
+                    return result;
+                    
+                } catch (error) {
+                    // Check if it's a network error that we should retry
+                    const isNetworkError = error.message.includes('Network error') || 
+                                         error.message.includes('timeout');
+                    
+                    if (isNetworkError && attempt < maxRetries - 1) {
+                        // Calculate exponential backoff
+                        const waitTime = retryDelay * Math.pow(2, attempt);
+                        
+                        // Show retry message
+                        showError('Connection lost. Retrying in ' + (waitTime/1000) + ' seconds... (Attempt ' + (attempt + 1) + '/' + maxRetries + ')');
+                        
+                        // Wait before retrying
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        
+                        // Clear error and continue to next attempt
+                        errorDiv.style.display = 'none';
+                        continue;
                     }
-                });
-                
-                xhr.addEventListener('load', () => {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        try {
-                            const response = JSON.parse(xhr.responseText);
-                            resolve(response);
-                        } catch (error) {
-                            reject(new Error('Invalid response from server'));
-                        }
-                    } else {
-                        try {
-                            const error = JSON.parse(xhr.responseText);
-                            reject(new Error(error.error || 'Upload failed'));
-                        } catch {
-                            reject(new Error('Upload failed'));
-                        }
-                    }
-                });
-                
-                xhr.addEventListener('error', () => {
-                    reject(new Error('Network error during upload'));
-                });
-                
-                xhr.addEventListener('abort', () => {
-                    reject(new Error('Upload cancelled'));
-                });
-                
-                xhr.open('POST', '/api/upload');
-                xhr.send(formData);
-            });
+                    
+                    // If it's not a network error or we've exhausted retries, throw
+                    throw error;
+                }
+            }
+            
+            // If we get here, all retries failed
+            throw new Error('Upload failed after multiple attempts. Please check your connection and try again.');
         }
 
         async function detectScenes(videoId) {

@@ -555,10 +555,10 @@ https://reels.hurated.com/api/scenes/video-1234567890
 
 ### Fetch News Articles with Videos 📰
 
-**Automatically fetch news articles with embedded videos** using Tavily (search) and BrowserBase (extraction):
+**Automatically fetch news articles with embedded videos** with multiple fetching strategies:
 
 ```bash
-# Fetch latest news articles with videos
+# Fetch latest news articles with videos (auto-fallback to RSS)
 ./scripts/fetch-news.sh
 
 # Custom search query
@@ -567,12 +567,22 @@ https://reels.hurated.com/api/scenes/video-1234567890
 # Try more articles (default: 5)
 ./scripts/fetch-news.sh -n 10
 
+# Fetch from specific URL (bypasses search)
+./scripts/fetch-from-url.sh "https://www.cnn.com/article-with-video"
+
 # On dev server
 ./scripts/fetch-news.sh dev
 ```
 
+**Fetching Strategies:**
+1. **Tavily Search** (primary) - Searches for news articles matching query
+2. **RSS Fallback** (automatic) - Falls back to 13 RSS feeds when Tavily fails (HTTP 432)
+   - CNN, NBC, ABC, Fox, CBS, BBC, Reuters, Al Jazeera
+   - The Verge, CNET, TechCrunch, Bloomberg, CNBC
+3. **Manual URL** (manual) - Fetch specific article by URL
+
 **What it does:**
-1. **Searches Tavily** for news articles matching query
+1. **Searches** for news articles (Tavily → RSS fallback if needed)
 2. **Extracts video URL** from article page using BrowserBase
 3. **Downloads video** to `uploads/articles/`
 4. **Saves metadata** to `output/articles/`
@@ -796,6 +806,30 @@ Response: {
   }
 }
 ```
+
+**Note:** Automatically falls back to RSS feeds if Tavily fails (HTTP 432).
+
+### Fetch Article from URL
+```bash
+POST /api/fetch-from-url
+Content-Type: application/json
+Body: {
+  url: "https://www.cnn.com/article-with-video"
+}
+Response: {
+  success: true,
+  article: {
+    articleId,
+    source: { url, domain },
+    video: { url, type, platform, localPath },
+    title,
+    text,
+    fetchedAt
+  }
+}
+```
+
+**Use case:** Bypass Tavily search when you have a specific article URL.
 
 ### List Articles
 ```bash
