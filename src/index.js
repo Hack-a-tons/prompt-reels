@@ -692,6 +692,23 @@ app.get('/videos', (req, res) => {
             background: rgba(113, 118, 123, 0.2);
             color: #71767b;
         }
+        .video-preview {
+            width: 160px;
+            height: 90px;
+            border-radius: 6px;
+            background: #0f1419;
+        }
+        .no-video {
+            width: 160px;
+            height: 90px;
+            background: #2f3336;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #71767b;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -733,6 +750,7 @@ app.get('/videos', (req, res) => {
         <table>
             <thead>
                 <tr>
+                    <th>Preview</th>
                     <th>Video ID</th>
                     <th>Scenes</th>
                     <th>Descriptions</th>
@@ -742,8 +760,14 @@ app.get('/videos', (req, res) => {
                 </tr>
             </thead>
             <tbody>
-                ${videos.map(video => `
+                ${videos.map(video => {
+                    // Get video thumbnail preview
+                    const thumbnailPath = `/api/thumbnails/${video.videoId}.mp4`;
+                    const videoHtml = `<video class="video-preview" autoplay muted loop playsinline><source src="${thumbnailPath}" type="video/mp4" onerror="this.parentElement.outerHTML='<div class=\"no-video\">No preview</div>'"></video>`;
+                    
+                    return `
                 <tr>
+                    <td>${videoHtml}</td>
                     <td><a href="/api/scenes/${video.videoId}" class="video-id">${video.videoId}</a></td>
                     <td>${video.sceneCount}</td>
                     <td><span class="badge ${video.hasDescriptions ? 'yes' : 'no'}">${video.hasDescriptions ? 'Yes' : 'No'}</span></td>
@@ -751,7 +775,8 @@ app.get('/videos', (req, res) => {
                     <td>${new Date(video.timestamp).toLocaleString()}</td>
                     <td><a href="/api/scenes/${video.videoId}" class="btn" style="padding: 6px 16px; font-size: 13px;">View</a></td>
                 </tr>
-                `).join('')}
+                `;
+                }).join('')}
             </tbody>
         </table>
         `}
