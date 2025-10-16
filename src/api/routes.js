@@ -5,7 +5,7 @@ const fs = require('fs');
 const config = require('../config');
 const { log } = require('../utils/logger');
 const { processVideo } = require('../core/videoProcessor');
-const { describeImage, describeScene, formatTranscript } = require('../core/gemini');
+const { describeImage, describeScene, generateSceneTitle, generateVideoTitle, formatTranscript } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
@@ -320,20 +320,40 @@ router.post('/detect-scenes', async (req, res) => {
 
     const videoPath = path.join(config.uploadDir, videoFiles[0]);
     
+    // Start timing
+    const timings = {
+      start: Date.now(),
+      sceneDetection: 0,
+      frameExtraction: 0,
+      transcription: 0,
+      formatting: 0,
+      descriptions: 0,
+      sceneTitles: 0,
+      videoTitle: 0,
+      total: 0
+    };
+    
     // Detect scenes
     console.log(`\n🎬 Scene detection for: ${videoId}`);
+    const sceneDetectStart = Date.now();
     let scenes = await detectScenes(videoPath, threshold);
+    timings.sceneDetection = Date.now() - sceneDetectStart;
+    console.log(`✓ Detected ${scenes.length} scenes (${(timings.sceneDetection / 1000).toFixed(1)}s)\n`);
     
     // Language handling (user-specified or auto-detected)
     let detectedLanguage = language;
     
     // Optionally extract frames
     if (extractFrames) {
+      const frameExtractStart = Date.now();
       const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
       scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+      timings.frameExtraction = Date.now() - frameExtractStart;
+      console.log(`✓ Frame extraction complete (${(timings.frameExtraction / 1000).toFixed(1)}s)\n`);
       
       // Step 1: Transcribe audio FIRST (if enabled) to detect language before describing
       if (transcribeAudio) {
+        const transcriptionStart = Date.now();
         console.log(`\n🎙️ Transcribing audio to detect language...`);
         
         // First pass: transcribe first scene WITHOUT target language to detect spoken language
@@ -419,10 +439,12 @@ router.post('/detect-scenes', async (req, res) => {
           }
         }
         
-        console.log(`✓ Audio transcription complete\n`);
+        timings.transcription = Date.now() - transcriptionStart;
+        console.log(`✓ Audio transcription complete (${(timings.transcription / 1000).toFixed(1)}s)\n`);
         
         // Step 2.5: Format transcripts for better readability
         if (scenes.some(s => s.transcript)) {
+          const formattingStart = Date.now();
           console.log(`\n📝 Formatting transcripts for readability...`);
           
           for (let i = 0; i < scenes.length; i++) {
@@ -445,12 +467,14 @@ router.post('/detect-scenes', async (req, res) => {
             }
           }
           
-          console.log(`✓ Transcript formatting complete\n`);
+          timings.formatting = Date.now() - formattingStart;
+          console.log(`✓ Transcript formatting complete (${(timings.formatting / 1000).toFixed(1)}s)\n`);
         }
       }
       
       // Step 3: Describe scenes ONCE in the correct language
       if (describeScenes) {
+        const descriptionsStart = Date.now();
         const targetLanguage = detectedLanguage || 'English';
         console.log(`\n📝 Generating scene descriptions in ${targetLanguage}...`);
         
@@ -488,33 +512,120 @@ router.post('/detect-scenes', async (req, res) => {
           }
         }
         
-        console.log(`✓ Scene descriptions complete\n`);
+        timings.descriptions = Date.now() - descriptionsStart;
+        console.log(`✓ Scene descriptions complete (${(timings.descriptions / 1000).toFixed(1)}s)\n`);
+        
+        // Step 4: Generate scene titles
+        const sceneTitlesStart = Date.now();
+        console.log(`\n🏷️ Generating scene titles...`);
+        
+        for (let i = 0; i < scenes.length; i++) {
+          const scene = scenes[i];
+          
+          if (scene.description) {
+            try {
+              const dialogue = scene.transcript?.formattedText || scene.transcript?.text || null;
+              const title = await generateSceneTitle(
+                scene.description,
+                dialogue,
+                targetLanguage
+              );
+              scene.title = title;
+              console.log(`  ✓ Scene ${scene.sceneId}: "${title}"`);
+            } catch (error) {
+              console.error(`  ✗ Failed to generate title for scene ${scene.sceneId}:`, error.message);
+              scene.title = `Scene ${scene.sceneId}`;
+            }
+          } else {
+            scene.title = `Scene ${scene.sceneId}`;
+          }
+        }
+        
+        timings.sceneTitles = Date.now() - sceneTitlesStart;
+        console.log(`✓ Scene titles complete (${(timings.sceneTitles / 1000).toFixed(1)}s)\n`);
       }
     }
-
-    // Save scene data
+    
+    // Step 5: Generate overall video title
+    const videoTitleStart = Date.now();
+    let videoTitle = 'Untitled Video';
+    
+    if (describeScenes && scenes.some(s => s.description || s.transcript)) {
+      console.log(`\n📋 Generating video title...`);
+      try {
+        videoTitle = await generateVideoTitle(scenes, detectedLanguage || 'English');
+        console.log(`✓ Video title: "${videoTitle}"\n`);
+      } catch (error) {
+        console.error(`✗ Failed to generate video title:`, error.message);
+      }
+    }
+    timings.videoTitle = Date.now() - videoTitleStart;
+    
+    // Save scene data to JSON file
     const scenesPath = path.join(config.outputDir, `${videoId}_scenes.json`);
     const sceneData = {
       videoId,
-      videoPath,
-      threshold,
+      title: videoTitle,
       sceneCount: scenes.length,
-      scenes,
-      language: detectedLanguage || 'English',
+      threshold,
       timestamp: new Date().toISOString(),
+      language: detectedLanguage || 'English',
+      scenes: scenes.map(scene => ({
+        sceneId: scene.sceneId,
+        title: scene.title || `Scene ${scene.sceneId}`,
+        start: scene.start,
+        end: scene.end,
+        duration: scene.end - scene.start,
+        frames: scene.frames || [],
+        description: scene.description || null,
+        transcript: scene.transcript || null,
+      })),
     };
     
     fs.writeFileSync(scenesPath, JSON.stringify(sceneData, null, 2));
 
     console.log(`✓ Scene detection complete: ${scenes.length} scenes detected`);
-    console.log(`✓ Saved to: ${scenesPath}\n`);
-
+    console.log(`✓ Thumbnail queued for generation\n`);
+    
+    // Calculate total time and log summary
+    timings.total = Date.now() - timings.start;
+    
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`⏱️  PROCESSING TIME SUMMARY`);
+    console.log(`${'='.repeat(60)}`);
+    console.log(`Upload & Setup:        ${(timings.upload - timings.start) / 1000}s`);
+    console.log(`Scene Detection:       ${(timings.sceneDetection / 1000).toFixed(1)}s`);
+    if (timings.frameExtraction > 0) {
+      console.log(`Frame Extraction:      ${(timings.frameExtraction / 1000).toFixed(1)}s`);
+    }
+    if (timings.transcription > 0) {
+      console.log(`Audio Transcription:   ${(timings.transcription / 1000).toFixed(1)}s`);
+    }
+    if (timings.formatting > 0) {
+      console.log(`Transcript Formatting: ${(timings.formatting / 1000).toFixed(1)}s`);
+    }
+    if (timings.descriptions > 0) {
+      console.log(`Scene Descriptions:    ${(timings.descriptions / 1000).toFixed(1)}s`);
+    }
+    if (timings.sceneTitles > 0) {
+      console.log(`Scene Titles:          ${(timings.sceneTitles / 1000).toFixed(1)}s`);
+    }
+    if (timings.videoTitle > 0) {
+      console.log(`Video Title:           ${(timings.videoTitle / 1000).toFixed(1)}s`);
+    }
+    console.log(`${'─'.repeat(60)}`);
+    console.log(`TOTAL TIME:            ${(timings.total / 1000).toFixed(1)}s`);
+    console.log(`${'='.repeat(60)}\n`);
+    
+    // Return response
     res.json({
       success: true,
       videoId,
+      title: videoTitle,
       sceneCount: scenes.length,
-      scenes,
-      outputPath: scenesPath,
+      threshold,
+      scenesFile: `${videoId}_scenes.json`,
+      processingTime: timings.total / 1000,
     });
   } catch (error) {
     console.error('Scene detection error:', error);
@@ -956,7 +1067,7 @@ router.get('/scenes/:videoId', (req, res) => {
 
   <div class="container">
     <div class="video-player">
-      <h2>📹 Video Playback</h2>
+      <h2>📹 ${sceneData.title || 'Video Playback'}</h2>
       <video id="videoPlayer" controls autoplay muted preload="metadata">
         <source src="/${videoPath}" type="video/mp4">
         Your browser does not support the video tag.
@@ -983,7 +1094,7 @@ router.get('/scenes/:videoId', (req, res) => {
         <div class="scene" id="scene-${scene.sceneId}">
           <div class="scene-header">
             <div>
-              <span class="scene-title">Scene ${scene.sceneId}</span>
+              <span class="scene-title">${scene.title || `Scene ${scene.sceneId}`}</span>
               <span class="scene-duration">(${scene.duration}s)</span>
             </div>
             <div class="scene-time" onclick="seekTo(${scene.start})">

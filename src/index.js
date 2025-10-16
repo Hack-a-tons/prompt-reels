@@ -667,13 +667,17 @@ app.get('/videos', (req, res) => {
         const scenePath = path.join(outputDir, file);
         const sceneData = JSON.parse(fs.readFileSync(scenePath, 'utf8'));
         
-        // Generate title from transcripts (priority) and descriptions
-        const transcripts = sceneData.scenes?.map(s => s.transcript?.text).filter(Boolean).join(' ') || '';
-        const descriptions = sceneData.scenes?.map(s => s.description).filter(Boolean).join(' ') || '';
-        const combined = (transcripts + ' ' + descriptions).trim();
-        let title = 'Untitled Video';
-        if (combined.length > 0) {
-          title = combined.length > 100 ? combined.substring(0, 97) + '...' : combined;
+        // Use AI-generated title if available, otherwise generate from transcripts and descriptions
+        let title = sceneData.title || 'Untitled Video';
+        
+        // Fallback: generate title from transcripts and descriptions if no AI title
+        if (title === 'Untitled Video') {
+          const transcripts = sceneData.scenes?.map(s => s.transcript?.text).filter(Boolean).join(' ') || '';
+          const descriptions = sceneData.scenes?.map(s => s.description).filter(Boolean).join(' ') || '';
+          const combined = (transcripts + ' ' + descriptions).trim();
+          if (combined.length > 0) {
+            title = combined.length > 100 ? combined.substring(0, 97) + '...' : combined;
+          }
         }
         
         videos.push({

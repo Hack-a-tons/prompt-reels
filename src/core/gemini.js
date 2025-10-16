@@ -211,6 +211,140 @@ Do NOT start with phrases like "In this scene" or "This scene shows". Just descr
 };
 
 /**
+ * Generate a concise title for a scene based on visual description and dialogue
+ * @param {string} visualDescription - Scene visual description
+ * @param {string} dialogue - Scene dialogue transcript (optional)
+ * @param {string} language - Language for the title
+ * @returns {Promise<string>} Concise one-line title
+ */
+const generateSceneTitle = async (visualDescription, dialogue = null, language = 'English') => {
+  try {
+    const dialoguePart = dialogue ? `\n\nDialogue:\n${dialogue}` : '';
+    const languageInstruction = language.toLowerCase() !== 'english' 
+      ? `Provide the title in ${language}.`
+      : '';
+    
+    const prompt = `Create a short, descriptive title (maximum one line, 8-12 words) for this scene.
+
+Visual: ${visualDescription}${dialoguePart}
+
+${languageInstruction}
+
+Requirements:
+- ONE line only (no periods at end)
+- Capture the main action or topic
+- Be specific and descriptive
+- Use active voice
+- No generic phrases like "Scene shows" or "In this scene"
+
+Return ONLY the title text, nothing else.`;
+
+    if (currentProvider === 'azure') {
+      if (!azureClient) {
+        return 'Untitled Scene';
+      }
+      
+      const response = await azureClient.chat.completions.create({
+        model: config.azureOpenAI.deploymentName,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 50,
+        temperature: 0.4,
+      });
+      
+      return response.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+    } else {
+      if (!geminiClient) {
+        return 'Untitled Scene';
+      }
+      
+      const model = geminiClient.getGenerativeModel({ 
+        model: config.geminiModel,
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 50,
+        }
+      });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim().replace(/^["']|["']$/g, '');
+    }
+  } catch (error) {
+    console.error(`Error generating scene title: ${error.message}`);
+    return 'Untitled Scene';
+  }
+};
+
+/**
+ * Generate an overall video title based on all scenes
+ * @param {Array} scenes - Array of scene objects with descriptions and transcripts
+ * @param {string} language - Language for the title
+ * @returns {Promise<string>} Concise one-line video title
+ */
+const generateVideoTitle = async (scenes, language = 'English') => {
+  try {
+    const summaries = scenes.map((s, i) => {
+      const desc = s.description || '';
+      const trans = s.transcript?.text || '';
+      return `Scene ${i + 1}: ${desc} ${trans}`.substring(0, 200);
+    }).join('\n');
+    
+    const languageInstruction = language.toLowerCase() !== 'english' 
+      ? `Provide the title in ${language}.`
+      : '';
+    
+    const prompt = `Create a short, descriptive title (maximum one line, 8-12 words) that summarizes this entire video.
+
+${summaries}
+
+${languageInstruction}
+
+Requirements:
+- ONE line only (no periods at end)
+- Capture the main theme or topic
+- Be specific and engaging
+- Use active voice
+- Professional and clear
+
+Return ONLY the title text, nothing else.`;
+
+    if (currentProvider === 'azure') {
+      if (!azureClient) {
+        return 'Untitled Video';
+      }
+      
+      const response = await azureClient.chat.completions.create({
+        model: config.azureOpenAI.deploymentName,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 50,
+        temperature: 0.4,
+      });
+      
+      return response.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
+    } else {
+      if (!geminiClient) {
+        return 'Untitled Video';
+      }
+      
+      const model = geminiClient.getGenerativeModel({ 
+        model: config.geminiModel,
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 50,
+        }
+      });
+      
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim().replace(/^["']|["']$/g, '');
+    }
+  } catch (error) {
+    console.error(`Error generating video title: ${error.message}`);
+    return 'Untitled Video';
+  }
+};
+
+/**
  * Format transcript text to make it more readable
  * Adds proper punctuation, capitalization, paragraph breaks, and emphasis
  * @param {string} text - Raw transcript text
@@ -353,6 +487,8 @@ initClients();
 module.exports = {
   describeImage,
   describeScene,
+  generateSceneTitle,
+  generateVideoTitle,
   formatTranscript,
   generateEmbedding,
   cosineSimilarity,
