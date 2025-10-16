@@ -102,9 +102,10 @@ const describeImage = async (imagePath, prompt) => {
  * @param {number} sceneId - Scene identifier
  * @param {number} start - Scene start time
  * @param {number} end - Scene end time
+ * @param {string} languageInstruction - Optional language instruction
  * @param {number} retryCount - Internal retry counter (do not pass manually)
  */
-const describeScene = async (framePaths, sceneId, start, end, retryCount = 0) => {
+const describeScene = async (framePaths, sceneId, start, end, languageInstruction = null, retryCount = 0) => {
   const MAX_RETRIES = 1; // Only try both providers once
   
   try {
@@ -114,16 +115,20 @@ const describeScene = async (framePaths, sceneId, start, end, retryCount = 0) =>
       return buffer.toString('base64');
     });
 
-    const prompt = `Analyze these ${frameData.length} frames from Scene ${sceneId} (${start.toFixed(1)}s - ${end.toFixed(1)}s) of a video. 
+    let prompt = `Analyze these ${frameData.length} frames from Scene ${sceneId} (${start.toFixed(1)}s - ${end.toFixed(1)}s) of a video. 
 The frames show the beginning, middle, and end of this scene.
 
-Provide a concise 2-3 sentence description of what happens in this scene. Focus on:
+Provide a clear, concise title (1-2 sentences maximum) that captures what happens in this scene. Focus on:
 - Main actions or events
 - Key subjects or objects
 - Scene setting or context
-- Any notable changes between the frames
 
-Keep the description clear, factual, and suitable for video analysis.`;
+Do NOT start with phrases like "In this scene" or "This scene shows". Just describe what's happening directly, as a title would.`;
+
+    // Add language instruction if provided
+    if (languageInstruction) {
+      prompt += `\n\n${languageInstruction}`;
+    }
 
     if (currentProvider === 'azure') {
       if (!azureClient) {
@@ -196,7 +201,7 @@ Keep the description clear, factual, and suitable for video analysis.`;
       console.log(`Switching to ${fallbackProvider} for scene description (retry ${retryCount + 1}/${MAX_RETRIES})`);
       const prevProvider = currentProvider;
       currentProvider = fallbackProvider;
-      const result = await describeScene(framePaths, sceneId, start, end, retryCount + 1);
+      const result = await describeScene(framePaths, sceneId, start, end, languageInstruction, retryCount + 1);
       currentProvider = prevProvider; // Restore provider
       return result;
     }

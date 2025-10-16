@@ -11,49 +11,59 @@ const config = require('../config');
  * @returns {Promise<boolean>} - True if successful, false otherwise
  */
 async function generateThumbnail(videoId) {
-  return new Promise((resolve, reject) => {
-    // Determine video path based on ID prefix
-    let videoPath;
-    if (videoId.startsWith('article-')) {
-      videoPath = path.join(config.uploadDir, 'articles', `${videoId}.mp4`);
-    } else if (videoId.startsWith('video-')) {
-      videoPath = path.join(config.uploadDir, `${videoId}.mp4`);
-    } else {
-      console.log(`⚠️  Unknown video ID format: ${videoId}`);
-      return resolve(false);
-    }
-    
+  return new Promise((resolve) => {
     const thumbnailsDir = path.join(config.uploadDir, 'thumbnails');
-    const thumbnailPath = path.join(thumbnailsDir, `${videoId}.mp4`);
-    const lockPath = path.join(thumbnailsDir, `${videoId}.lock`);
-    
-    // Check if video exists
-    if (!fs.existsSync(videoPath)) {
-      console.log(`⚠️  Video not found for thumbnail generation: ${videoId}`);
-      return resolve(false);
+    if (!fs.existsSync(thumbnailsDir)) {
+      fs.mkdirSync(thumbnailsDir, { recursive: true });
     }
+    
+    const thumbnailPath = path.join(thumbnailsDir, `${videoId}.mp4`);
     
     // Check if thumbnail already exists
     if (fs.existsSync(thumbnailPath)) {
       console.log(`⏭️  Thumbnail already exists: ${videoId}`);
-      return resolve(true);
+      return resolve(false);
     }
     
-    // Check if another process is generating this thumbnail
+    // Check for lock file (another process is generating)
+    const lockPath = path.join(thumbnailsDir, `${videoId}.lock`);
     if (fs.existsSync(lockPath)) {
       const lockAge = Date.now() - fs.statSync(lockPath).mtimeMs;
       if (lockAge < 300000) { // 5 minutes
         console.log(`⏸️  Thumbnail generation in progress: ${videoId}`);
         return resolve(false);
       } else {
-        // Stale lock file, remove it
-        fs.unlinkSync(lockPath);
+        fs.unlinkSync(lockPath); // Stale lock file, remove it
       }
     }
     
-    // Create thumbnails directory if it doesn't exist
-    if (!fs.existsSync(thumbnailsDir)) {
-      fs.mkdirSync(thumbnailsDir, { recursive: true });
+    // Video extensions to check
+    const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+    
+    // Find video path
+    let videoPath;
+    if (videoId.startsWith('article-')) {
+      // Try all extensions for article videos
+      for (const ext of videoExtensions) {
+        const testPath = path.join(config.uploadDir, 'articles', `${videoId}${ext}`);
+        if (fs.existsSync(testPath)) {
+          videoPath = testPath;
+          break;
+        }
+      }
+    } else {
+      // Check if video file exists with any extension
+      const videoFiles = fs.readdirSync(config.uploadDir)
+        .filter(f => f.startsWith(videoId) && videoExtensions.some(ext => f.endsWith(ext)));
+      
+      if (videoFiles.length > 0) {
+        videoPath = path.join(config.uploadDir, videoFiles[0]);
+      }
+    }
+    
+    if (!videoPath || !fs.existsSync(videoPath)) {
+      console.error(`❌ Video not found: ${videoId}`);
+      return resolve(false);
     }
     
     // Create lock file
@@ -101,19 +111,34 @@ async function generateAllThumbnails() {
   
   let videos = [];
   
+  // Video extensions to check
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+  
   // Get article videos
   if (fs.existsSync(articlesDir)) {
     const articleVideos = fs.readdirSync(articlesDir)
-      .filter(f => f.startsWith('article-') && f.endsWith('.mp4'))
-      .map(f => f.replace('.mp4', ''));
+      .filter(f => f.startsWith('article-') && videoExtensions.some(ext => f.endsWith(ext)))
+      .map(f => {
+        // Remove extension
+        for (const ext of videoExtensions) {
+          if (f.endsWith(ext)) return f.replace(ext, '');
+        }
+        return f;
+      });
     videos.push(...articleVideos);
   }
   
   // Get user-uploaded videos
   if (fs.existsSync(uploadsDir)) {
     const userVideos = fs.readdirSync(uploadsDir)
-      .filter(f => f.startsWith('video-') && f.endsWith('.mp4'))
-      .map(f => f.replace('.mp4', ''));
+      .filter(f => f.startsWith('video-') && videoExtensions.some(ext => f.endsWith(ext)))
+      .map(f => {
+        // Remove extension
+        for (const ext of videoExtensions) {
+          if (f.endsWith(ext)) return f.replace(ext, '');
+        }
+        return f;
+      });
     videos.push(...userVideos);
   }
   
