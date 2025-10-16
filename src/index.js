@@ -249,6 +249,23 @@ app.get('/analyze', (req, res) => {
             <input type="file" id="fileInput" accept="video/*">
         </div>
 
+        <div style="text-align: center; margin: 20px 0; color: #71767b; font-size: 14px;">OR</div>
+
+        <div style="max-width: 600px; margin: 0 auto 30px;">
+            <label style="display: block; margin-bottom: 8px; color: #667eea; font-weight: 600;">Video URL</label>
+            <input type="url" id="videoUrl" placeholder="https://example.com/video.mp4" 
+                   style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 15px;"
+                   oninput="handleUrlInput()">
+            <div style="font-size: 12px; color: #71767b; margin-top: 5px;">Paste a direct video URL to download instead of uploading</div>
+        </div>
+
+        <div style="max-width: 600px; margin: 0 auto 30px;">
+            <label style="display: block; margin-bottom: 8px; color: #667eea; font-weight: 600;">Language (optional)</label>
+            <input type="text" id="languageInput" placeholder="Auto-detect (or enter: English, Spanish, French, etc.)" 
+                   style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 15px;">
+            <div style="font-size: 12px; color: #71767b; margin-top: 5px;">Leave empty to auto-detect from video transcription</div>
+        </div>
+
         <div class="file-info" id="fileInfo">
             <div class="file-info-item">
                 <span class="file-info-label">File:</span>
@@ -285,9 +302,12 @@ app.get('/analyze', (req, res) => {
 
     <script>
         let selectedFile = null;
+        let videoUrl = '';
 
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
+        const videoUrlInput = document.getElementById('videoUrl');
+        const languageInput = document.getElementById('languageInput');
         const fileInfo = document.getElementById('fileInfo');
         const analyzeBtn = document.getElementById('analyzeBtn');
         const progressContainer = document.getElementById('progressContainer');
@@ -323,8 +343,36 @@ app.get('/analyze', (req, res) => {
             }
         });
 
+        function handleUrlInput() {
+            videoUrl = videoUrlInput.value.trim();
+            if (videoUrl) {
+                // Clear file selection
+                selectedFile = null;
+                fileInput.value = '';
+                fileInfo.style.display = 'none';
+                uploadArea.querySelector('.upload-text').textContent = 'Click to upload or drag and drop';
+                uploadArea.querySelector('.upload-icon').textContent = '📹';
+                
+                // Enable analyze button
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = 'Download & Analyze Video';
+                
+                // Hide error
+                errorDiv.style.display = 'none';
+            } else {
+                analyzeBtn.textContent = 'Analyze Video';
+                if (!selectedFile) {
+                    analyzeBtn.disabled = true;
+                }
+            }
+        }
+
         function handleFile(file) {
             selectedFile = file;
+            
+            // Clear URL input
+            videoUrl = '';
+            videoUrlInput.value = '';
             
             // Show file info
             document.getElementById('fileName').textContent = file.name;
@@ -333,6 +381,7 @@ app.get('/analyze', (req, res) => {
             
             // Enable analyze button
             analyzeBtn.disabled = false;
+            analyzeBtn.textContent = 'Analyze Video';
             
             // Update upload area text
             uploadArea.querySelector('.upload-text').textContent = '✓ Video selected';
@@ -349,13 +398,14 @@ app.get('/analyze', (req, res) => {
         }
 
         async function analyzeVideo() {
-            if (!selectedFile) {
-                showError('Please select a video file');
+            // Check if we have either a file or URL
+            if (!selectedFile && !videoUrl) {
+                showError('Please select a video file or enter a video URL');
                 return;
             }
 
-            // Check file size (200MB limit)
-            if (selectedFile.size > 200 * 1024 * 1024) {
+            // Check file size if uploading (200MB limit)
+            if (selectedFile && selectedFile.size > 200 * 1024 * 1024) {
                 showError('File too large. Maximum size is 200MB.');
                 return;
             }
@@ -367,14 +417,27 @@ app.get('/analyze', (req, res) => {
             errorDiv.style.display = 'none';
 
             try {
-                // Step 1: Upload video
-                updateProgress(0, 1, 'Uploading 0%');
-                const uploadResult = await uploadVideo(selectedFile);
-                const videoId = uploadResult.videoId;
+                let videoId;
+                
+                if (videoUrl) {
+                    // Step 1: Download video from URL
+                    updateProgress(0, 1, 'Downloading from URL...');
+                    const downloadResult = await downloadVideoFromUrl(videoUrl);
+                    videoId = downloadResult.videoId;
+                    updateProgress(25, 1, 'Download complete');
+                } else {
+                    // Step 1: Upload video
+                    updateProgress(0, 1, 'Uploading 0%');
+                    const uploadResult = await uploadVideo(selectedFile);
+                    videoId = uploadResult.videoId;
+                }
+
+                // Get language preference
+                const language = languageInput.value.trim() || null;
 
                 // Step 2: Detect scenes with frames extraction and descriptions
                 updateProgress(25, 2, 'Detecting scenes...');
-                const sceneResult = await detectScenes(videoId);
+                const sceneResult = await detectScenes(videoId, language);
                 
                 // Step 3: Extraction and descriptions
                 updateProgress(50, 3, 'Extracting frames...');
@@ -389,14 +452,29 @@ app.get('/analyze', (req, res) => {
             } catch (error) {
                 showError(error.message || 'Analysis failed. Please try again.');
                 analyzeBtn.disabled = false;
-                analyzeBtn.textContent = 'Analyze Video';
+                analyzeBtn.textContent = videoUrl ? 'Download & Analyze Video' : 'Analyze Video';
                 progressContainer.style.display = 'none';
             }
         }
 
+        async function downloadVideoFromUrl(url) {
+            const response = await fetch('/api/download-video', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to download video from URL');
+            }
+
+            return response.json();
+        }
+
         async function uploadVideo(file) {
-            const maxRetries = 5;
-            const retryDelay = 3000; // Start with 3 seconds
+            const maxRetries = 8;
+            const retryDelay = 5000; // Start with 5 seconds
             
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
@@ -442,7 +520,7 @@ app.get('/analyze', (req, res) => {
                         });
                         
                         // Set timeout for detecting stalled connections
-                        xhr.timeout = 180000; // 3 minutes timeout for large files
+                        xhr.timeout = 300000; // 5 minutes timeout for large files and network switches
                         xhr.addEventListener('timeout', () => {
                             reject(new Error('Upload timeout - connection may be lost'));
                         });
@@ -460,11 +538,11 @@ app.get('/analyze', (req, res) => {
                                          error.message.includes('timeout');
                     
                     if (isNetworkError && attempt < maxRetries - 1) {
-                        // Calculate exponential backoff
-                        const waitTime = retryDelay * Math.pow(2, attempt);
+                        // Calculate exponential backoff with max cap
+                        const waitTime = Math.min(retryDelay * Math.pow(2, attempt), 60000); // Cap at 60 seconds
                         
                         // Show retry message
-                        showError('Connection lost. Retrying in ' + (waitTime/1000) + ' seconds... (Attempt ' + (attempt + 1) + '/' + maxRetries + ')');
+                        showError('Connection lost (network switch or timeout). Waiting ' + (waitTime/1000) + ' seconds to reconnect... (Attempt ' + (attempt + 1) + '/' + maxRetries + ')');
                         
                         // Wait before retrying
                         await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -483,7 +561,7 @@ app.get('/analyze', (req, res) => {
             throw new Error('Upload failed after multiple attempts. Please check your connection and try again.');
         }
 
-        async function detectScenes(videoId) {
+        async function detectScenes(videoId, language) {
             const response = await fetch('/api/detect-scenes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -492,7 +570,8 @@ app.get('/analyze', (req, res) => {
                     threshold: 0.4,
                     extractFrames: true,
                     describeScenes: true,
-                    transcribeAudio: true
+                    transcribeAudio: true,
+                    language: language
                 })
             });
 

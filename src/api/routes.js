@@ -20,6 +20,42 @@ const {
 
 const router = express.Router();
 
+/**
+ * Detect language from text using simple heuristics
+ * Returns language name (e.g., "Spanish", "French", "English")
+ */
+function detectLanguageFromText(text) {
+  const sample = text.toLowerCase().substring(0, 500);
+  
+  // Common words in different languages
+  const patterns = {
+    'Spanish': /\b(el|la|los|las|de|que|es|en|y|un|una|por|con|no|se|para|como|su|al|lo|pero|más|si|yo|mi|tú|muy|también|todo|cuando|donde|tiene|sobre|este|esta|hacer|puede|ahora|porque|soy|antes|algo|aquí)\b/gi,
+    'French': /\b(le|la|les|de|et|un|une|est|dans|que|pour|par|sur|il|elle|pas|ce|se|qui|avec|ne|vous|je|tu|nous|son|sa|ses|mais|tout|faire|être|avoir|comme|peut|plus|si|très|bien|encore|où|quand)\b/gi,
+    'German': /\b(der|die|das|den|dem|des|und|in|zu|den|ist|ein|eine|ich|nicht|von|mit|werden|auch|sich|aus|an|hat|wird|auf|für|als|bei|nach|über|kann|nur|wenn|wie|sie|es|war|haben)\b/gi,
+    'Portuguese': /\b(o|a|os|as|de|que|e|do|da|em|um|uma|para|com|não|se|na|por|mais|como|mas|foi|ele|está|este|você|ou|ser|ao|tem|às|seu|sua|muito|já|mesmo|também|quando|onde|bem|sem|até)\b/gi,
+    'Italian': /\b(il|lo|la|i|gli|le|di|a|da|in|con|su|per|tra|fra|un|uno|una|è|sono|che|non|si|questo|questa|come|più|ma|anche|essere|fare|avere|tutto|molto|io|tu|lui|lei|noi|voi|loro|dove|quando)\b/gi,
+    'Russian': /[а-яА-ЯёЁ]{3,}/g,
+    'Arabic': /[\u0600-\u06FF]{3,}/g,
+    'Chinese': /[\u4E00-\u9FFF]{2,}/g,
+    'Japanese': /[\u3040-\u309F\u30A0-\u30FF]{2,}/g,
+    'Korean': /[\uAC00-\uD7A3]{2,}/g
+  };
+  
+  let bestMatch = 'English';
+  let maxMatches = 0;
+  
+  for (const [lang, pattern] of Object.entries(patterns)) {
+    const matches = (sample.match(pattern) || []).length;
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestMatch = lang;
+    }
+  }
+  
+  // Require at least 5 matches to override English default
+  return maxMatches >= 5 ? bestMatch : 'English';
+}
+
 // Configure multer for video uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -81,6 +117,72 @@ router.post('/upload', upload.single('video'), async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/download-video
+ * Download a video from URL
+ */
+router.post('/download-video', async (req, res) => {
+  try {
+    const { url } = req.body;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'Video URL is required' });
+    }
+
+    // Validate URL
+    try {
+      new URL(url);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
+    const axios = require('axios');
+    const fs = require('fs');
+    const path = require('path');
+
+    // Generate unique video ID
+    const videoId = 'video-' + Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const videoPath = path.join(config.uploadDir, `${videoId}.mp4`);
+
+    log.info(`Downloading video from URL: ${url}`);
+
+    // Download video with streaming
+    const response = await axios({
+      method: 'get',
+      url: url,
+      responseType: 'stream',
+      timeout: 300000, // 5 minutes
+      maxContentLength: 200 * 1024 * 1024, // 200MB limit
+      maxBodyLength: 200 * 1024 * 1024
+    });
+
+    const writer = fs.createWriteStream(videoPath);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    log.info(`Video downloaded: ${videoPath}`);
+
+    // Generate thumbnail for downloaded video
+    const { generateThumbnail } = require('../utils/thumbnailGenerator');
+    generateThumbnail(videoId).catch(err => {
+      log.warn(`Failed to generate thumbnail for ${videoId}: ${err.message}`);
+    });
+
+    res.json({
+      success: true,
+      videoId,
+      path: videoPath
+    });
+  } catch (error) {
+    log.error(`Video download failed: ${error.message}`);
+    res.status(500).json({ error: error.message || 'Failed to download video' });
   }
 });
 
@@ -177,7 +279,7 @@ router.post('/analyze', async (req, res) => {
  */
 router.post('/detect-scenes', async (req, res) => {
   try {
-    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false, transcribeAudio = false } = req.body;
+    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false, transcribeAudio = false, language = null } = req.body;
     
     if (!videoId) {
       return res.status(400).json({ error: 'videoId is required' });
@@ -270,6 +372,44 @@ router.post('/detect-scenes', async (req, res) => {
       }
     }
 
+    // Detect language from transcripts if not specified by user
+    let detectedLanguage = language;
+    if (!detectedLanguage && transcribeAudio && scenes.length > 0) {
+      const transcripts = scenes.map(s => s.transcript?.text).filter(Boolean).join(' ');
+      if (transcripts.length > 50) {
+        detectedLanguage = detectLanguageFromText(transcripts);
+        console.log(`🌐 Auto-detected language: ${detectedLanguage}`);
+      }
+    }
+
+    // Update scene descriptions with detected language
+    if (describeScenes && detectedLanguage && detectedLanguage.toLowerCase() !== 'english') {
+      console.log(`\n🌐 Regenerating descriptions in ${detectedLanguage}...`);
+      
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i];
+        
+        if (scene.frames && scene.frames.length > 0 && scene.description) {
+          try {
+            const framePaths = scene.frames.map(frame => frame.path);
+            const languagePrompt = `Please provide your response in ${detectedLanguage} language.`;
+            
+            scene.description = await describeScene(
+              framePaths,
+              scene.sceneId,
+              scene.start,
+              scene.end,
+              languagePrompt
+            );
+            console.log(`  ✓ Scene ${scene.sceneId} (${detectedLanguage})`);
+          } catch (error) {
+            console.error(`  ✗ Failed to translate scene ${scene.sceneId}:`, error.message);
+          }
+        }
+      }
+      console.log(`✓ Descriptions in ${detectedLanguage} complete\n`);
+    }
+
     // Save scene data
     const scenesPath = path.join(config.outputDir, `${videoId}_scenes.json`);
     const sceneData = {
@@ -278,6 +418,7 @@ router.post('/detect-scenes', async (req, res) => {
       threshold,
       sceneCount: scenes.length,
       scenes,
+      language: detectedLanguage || 'English',
       timestamp: new Date().toISOString(),
     };
     
