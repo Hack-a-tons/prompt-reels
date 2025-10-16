@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const config = require('../config');
 const { log } = require('../utils/logger');
 const { processVideo } = require('../core/videoProcessor');
@@ -593,6 +594,9 @@ router.post('/detect-scenes', async (req, res) => {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`⏱️  PROCESSING TIME SUMMARY`);
     console.log(`${'='.repeat(60)}`);
+    console.log(`Video: ${videoTitle}`);
+    console.log(`ID: ${videoId}`);
+    console.log(`${'─'.repeat(60)}`);
     console.log(`Upload & Setup:        ${(timings.upload - timings.start) / 1000}s`);
     console.log(`Scene Detection:       ${(timings.sceneDetection / 1000).toFixed(1)}s`);
     if (timings.frameExtraction > 0) {
@@ -1058,8 +1062,8 @@ router.get('/scenes/:videoId', (req, res) => {
 <body>
   <div class="header">
     <a href="${backLink}" class="back-link">← ${videoId.startsWith('article-') ? 'Back' : 'My Videos'}</a>
-    <h1>🎬 Scene Viewer</h1>
-    <p>Video ID: ${videoId}</p>
+    <h1>🎬 ${sceneData.title || 'Scene Viewer'}</h1>
+    <p style="font-size: 0.9em; color: #71767b;">Video ID: ${videoId}</p>
     ${!videoId.startsWith('article-') ? `
       <p class="created-with">Created with <a href="https://reels.hurated.com/analyze">reels.hurated.com/analyze</a></p>
     ` : ''}

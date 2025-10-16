@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const config = require('./config');
@@ -30,8 +31,7 @@ const getBuildTimestamp = () => {
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// Logging middleware (logs all API calls with timestamp, IP, request/response)
+app.use(cookieParser());
 app.use(logMiddleware);
 
 // Serve static files (videos and extracted frames)
