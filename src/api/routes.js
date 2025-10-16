@@ -66,6 +66,12 @@ router.post('/upload', upload.single('video'), async (req, res) => {
 
     const videoId = path.basename(req.file.filename, path.extname(req.file.filename));
     
+    // Generate thumbnail for uploaded video (async, don't wait)
+    const { generateThumbnail } = require('../utils/thumbnailGenerator');
+    generateThumbnail(videoId).catch(err => {
+      log.warn(`Failed to generate thumbnail for ${videoId}: ${err.message}`);
+    });
+    
     res.json({
       success: true,
       videoId,

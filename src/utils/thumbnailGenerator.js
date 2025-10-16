@@ -7,24 +7,34 @@ const config = require('../config');
  * Generate a thumbnail for a video
  * Creates a small, optimized preview from the full video
  * 
- * @param {string} articleId - Article ID (e.g., "article-123")
+ * @param {string} videoId - Video ID (e.g., "article-123" or "video-123")
  * @returns {Promise<boolean>} - True if successful, false otherwise
  */
-async function generateThumbnail(articleId) {
+async function generateThumbnail(videoId) {
   return new Promise((resolve, reject) => {
-    const videoPath = path.join(config.uploadDir, 'articles', `${articleId}.mp4`);
+    // Determine video path based on ID prefix
+    let videoPath;
+    if (videoId.startsWith('article-')) {
+      videoPath = path.join(config.uploadDir, 'articles', `${videoId}.mp4`);
+    } else if (videoId.startsWith('video-')) {
+      videoPath = path.join(config.uploadDir, `${videoId}.mp4`);
+    } else {
+      console.log(`⚠️  Unknown video ID format: ${videoId}`);
+      return resolve(false);
+    }
+    
     const thumbnailsDir = path.join(config.uploadDir, 'thumbnails');
-    const thumbnailPath = path.join(thumbnailsDir, `${articleId}.mp4`);
+    const thumbnailPath = path.join(thumbnailsDir, `${videoId}.mp4`);
     
     // Check if video exists
     if (!fs.existsSync(videoPath)) {
-      console.log(`⚠️  Video not found for thumbnail generation: ${articleId}`);
+      console.log(`⚠️  Video not found for thumbnail generation: ${videoId}`);
       return resolve(false);
     }
     
     // Check if thumbnail already exists
     if (fs.existsSync(thumbnailPath)) {
-      console.log(`⏭️  Thumbnail already exists: ${articleId}`);
+      console.log(`⏭️  Thumbnail already exists: ${videoId}`);
       return resolve(true);
     }
     
@@ -33,7 +43,7 @@ async function generateThumbnail(articleId) {
       fs.mkdirSync(thumbnailsDir, { recursive: true });
     }
     
-    console.log(`🎬 Generating thumbnail for: ${articleId}`);
+    console.log(`🎬 Generating thumbnail for: ${videoId}`);
     
     // ffmpeg command to generate thumbnail
     // - First 5 seconds
@@ -44,17 +54,17 @@ async function generateThumbnail(articleId) {
     
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
-        console.error(`❌ Thumbnail generation failed for ${articleId}:`, error.message);
+        console.error(`❌ Thumbnail generation failed for ${videoId}:`, error.message);
         return resolve(false);
       }
       
       if (fs.existsSync(thumbnailPath)) {
         const stats = fs.statSync(thumbnailPath);
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-        console.log(`✓ Thumbnail generated for ${articleId}: ${sizeMB} MB`);
+        console.log(`✓ Thumbnail generated for ${videoId}: ${sizeMB} MB`);
         resolve(true);
       } else {
-        console.error(`❌ Thumbnail file not created for ${articleId}`);
+        console.error(`❌ Thumbnail file not created for ${videoId}`);
         resolve(false);
       }
     });
@@ -67,15 +77,30 @@ async function generateThumbnail(articleId) {
  */
 async function generateAllThumbnails() {
   const articlesDir = path.join(config.uploadDir, 'articles');
+  const uploadsDir = config.uploadDir;
   
-  if (!fs.existsSync(articlesDir)) {
-    console.log('No articles directory found');
-    return { processed: 0, skipped: 0, failed: 0 };
+  let videos = [];
+  
+  // Get article videos
+  if (fs.existsSync(articlesDir)) {
+    const articleVideos = fs.readdirSync(articlesDir)
+      .filter(f => f.startsWith('article-') && f.endsWith('.mp4'))
+      .map(f => f.replace('.mp4', ''));
+    videos.push(...articleVideos);
   }
   
-  const videos = fs.readdirSync(articlesDir)
-    .filter(f => f.startsWith('article-') && f.endsWith('.mp4'))
-    .map(f => f.replace('.mp4', ''));
+  // Get user-uploaded videos
+  if (fs.existsSync(uploadsDir)) {
+    const userVideos = fs.readdirSync(uploadsDir)
+      .filter(f => f.startsWith('video-') && f.endsWith('.mp4'))
+      .map(f => f.replace('.mp4', ''));
+    videos.push(...userVideos);
+  }
+  
+  if (videos.length === 0) {
+    console.log('No videos found');
+    return { processed: 0, skipped: 0, failed: 0 };
+  }
   
   console.log(`\n🎬 Generating thumbnails for ${videos.length} video(s)...`);
   
@@ -83,15 +108,15 @@ async function generateAllThumbnails() {
   let skipped = 0;
   let failed = 0;
   
-  for (const articleId of videos) {
-    const thumbnailPath = path.join(config.uploadDir, 'thumbnails', `${articleId}.mp4`);
+  for (const videoId of videos) {
+    const thumbnailPath = path.join(config.uploadDir, 'thumbnails', `${videoId}.mp4`);
     
     if (fs.existsSync(thumbnailPath)) {
       skipped++;
       continue;
     }
     
-    const success = await generateThumbnail(articleId);
+    const success = await generateThumbnail(videoId);
     if (success) {
       processed++;
     } else {

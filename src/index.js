@@ -362,23 +362,24 @@ app.get('/analyze', (req, res) => {
 
             // Disable button and show progress
             analyzeBtn.disabled = true;
-            analyzeBtn.innerHTML = '<span class="spinner"></span>Processing...';
+            analyzeBtn.innerHTML = '<span class="spinner"></span>Starting...';
             progressContainer.style.display = 'block';
             errorDiv.style.display = 'none';
 
             try {
                 // Step 1: Upload video
-                updateProgress(25, 1);
+                updateProgress(0, 1, 'Uploading 0%');
                 const uploadResult = await uploadVideo(selectedFile);
                 const videoId = uploadResult.videoId;
 
                 // Step 2: Detect scenes with frames extraction and descriptions
-                updateProgress(50, 2);
-                await detectScenes(videoId);
-
-                // Step 3 & 4: Extraction and descriptions happen in one API call
-                updateProgress(75, 3);
-                updateProgress(100, 4);
+                updateProgress(25, 2, 'Detecting scenes...');
+                const sceneResult = await detectScenes(videoId);
+                
+                // Step 3: Extraction and descriptions
+                updateProgress(50, 3, 'Extracting frames...');
+                updateProgress(75, 3, 'Generating descriptions...');
+                updateProgress(100, 4, 'Complete!');
 
                 // Redirect to scene viewer
                 setTimeout(() => {
@@ -394,8 +395,8 @@ app.get('/analyze', (req, res) => {
         }
 
         async function uploadVideo(file) {
-            const maxRetries = 3;
-            const retryDelay = 2000; // Start with 2 seconds
+            const maxRetries = 5;
+            const retryDelay = 3000; // Start with 3 seconds
             
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
@@ -410,7 +411,7 @@ app.get('/analyze', (req, res) => {
                             if (e.lengthComputable) {
                                 const percentComplete = (e.loaded / e.total) * 100;
                                 const uploadPercent = Math.min(25, percentComplete * 0.25); // Upload is first 25% of total progress
-                                updateProgress(uploadPercent, 1);
+                                updateProgress(uploadPercent, 1, 'Uploading ' + percentComplete.toFixed(1) + '%');
                             }
                         });
                         
@@ -441,7 +442,7 @@ app.get('/analyze', (req, res) => {
                         });
                         
                         // Set timeout for detecting stalled connections
-                        xhr.timeout = 60000; // 60 seconds timeout
+                        xhr.timeout = 180000; // 3 minutes timeout for large files
                         xhr.addEventListener('timeout', () => {
                             reject(new Error('Upload timeout - connection may be lost'));
                         });
@@ -503,8 +504,13 @@ app.get('/analyze', (req, res) => {
             return response.json();
         }
 
-        function updateProgress(percent, step) {
+        function updateProgress(percent, step, message) {
             document.getElementById('progressFill').style.width = percent + '%';
+            
+            // Update button text if message provided
+            if (message) {
+                analyzeBtn.innerHTML = '<span class="spinner"></span>' + message;
+            }
             
             // Update step status
             for (let i = 1; i <= 4; i++) {
