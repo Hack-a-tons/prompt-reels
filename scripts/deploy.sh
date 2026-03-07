@@ -161,6 +161,21 @@ else
     exit 1
 fi
 
+# Copy .env to server
+echo ""
+echo -e "${YELLOW}[4.5/7] Copying .env to server...${NC}"
+if [ -f ".env" ]; then
+    scp .env $SERVER:$PROJECT_DIR/.env
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ .env copied${NC}"
+    else
+        echo -e "${RED}✗ Failed to copy .env${NC}"
+        exit 1
+    fi
+else
+    echo -e "${BLUE}ℹ No local .env file to copy${NC}"
+fi
+
 # Step 5 & 6: Rebuild and restart Docker
 echo ""
 if [ "$SKIP_BUILD" = true ]; then
