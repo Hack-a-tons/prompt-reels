@@ -336,10 +336,12 @@ router.post('/detect-scenes', async (req, res) => {
     
     // Detect scenes
     console.log(`\n🎬 Scene detection for: ${videoId}`);
+    sendProgress(videoId, '🎬 Detecting scenes...', 10);
     const sceneDetectStart = Date.now();
     let scenes = await detectScenes(videoPath, threshold);
     timings.sceneDetection = Date.now() - sceneDetectStart;
     console.log(`✓ Detected ${scenes.length} scenes (${(timings.sceneDetection / 1000).toFixed(1)}s)\n`);
+    sendProgress(videoId, `✓ Detected ${scenes.length} scenes`, 20);
     
     // Language handling (user-specified or auto-detected)
     let detectedLanguage = language;
@@ -485,6 +487,7 @@ router.post('/detect-scenes', async (req, res) => {
           if (scene.frames && scene.frames.length > 0) {
             try {
               console.log(`  Describing scene ${scene.sceneId}...`);
+              sendProgress(videoId, `📝 Describing scene ${scene.sceneId}/${scenes.length}...`, 40 + (i / scenes.length * 40));
               
               // Get absolute paths to frame files
               const framePaths = scene.frames.map(frame => frame.path);
@@ -1090,6 +1093,13 @@ router.get('/scenes/:videoId', (req, res) => {
           <div class="stat-label">Detected</div>
           <div class="stat-value">${new Date(sceneData.timestamp).toLocaleDateString()}</div>
         </div>
+        ${!videoId.startsWith('article-') && !sceneData.scenes.some(s => s.transcript) ? `
+        <div class="stat">
+          <button id="reprocessBtn" style="background: #1d9bf0; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em;">
+            🔄 Add Transcription
+          </button>
+        </div>
+        ` : ''}
       </div>
     </div>
 
@@ -1166,6 +1176,41 @@ router.get('/scenes/:videoId', (req, res) => {
       video.currentTime = time;
       video.play();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Reprocess button handler
+    const reprocessBtn = document.getElementById('reprocessBtn');
+    if (reprocessBtn) {
+      reprocessBtn.addEventListener('click', async () => {
+        if (!confirm('Re-process this video to add transcription? This may take a few minutes.')) {
+          return;
+        }
+        
+        reprocessBtn.disabled = true;
+        reprocessBtn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite">⏳</span> Processing...';
+        
+        try {
+          const response = await fetch('/api/reprocess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: '${videoId}' })
+          });
+          
+          if (response.ok) {
+            alert('Processing complete! Reloading page...');
+            location.reload();
+          } else {
+            const error = await response.json();
+            alert('Error: ' + (error.error || 'Processing failed'));
+            reprocessBtn.disabled = false;
+            reprocessBtn.innerHTML = '🔄 Add Transcription';
+          }
+        } catch (error) {
+          alert('Error: ' + error.message);
+          reprocessBtn.disabled = false;
+          reprocessBtn.innerHTML = '🔄 Add Transcription';
+        }
+      });
     }
 
     // Auto-scroll to current scene
@@ -2087,5 +2132,102 @@ router.get('/queue/status', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * POST /api/reprocess
+ * Re-process an existing video with transcription
+ */
+router.post('/reprocess', async (req, res) => {
+  try {
+    const { videoId } = req.body;
+    
+    if (!videoId) {
+      return res.status(400).json({ error: 'videoId is required' });
+    }
+
+    // Find video file
+    const videoFiles = fs.readdirSync(config.uploadDir)
+      .filter(f => f.startsWith(videoId));
+    
+    if (videoFiles.length === 0) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    // Trigger re-processing with transcription
+    const result = await fetch(`${req.protocol}://${req.get('host')}/api/detect-scenes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId,
+        threshold: 0.4,
+        extractFrames: true,
+        describeScenes: true,
+        transcribeAudio: true
+      })
+    });
+
+    const data = await result.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Re-process error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/progress/:videoId
+ * Server-Sent Events endpoint for real-time progress updates
+ */
+router.get('/progress/:videoId', (req, res) => {
+  const { videoId } = req.params;
+  
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // Store client connection
+  if (!global.progressClients) {
+    global.progressClients = {};
+  }
+  
+  if (!global.progressClients[videoId]) {
+    global.progressClients[videoId] = [];
+  }
+  
+  global.progressClients[videoId].push(res);
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', videoId })}\n\n`);
+  
+  // Clean up on close
+  req.on('close', () => {
+    if (global.progressClients[videoId]) {
+      global.progressClients[videoId] = global.progressClients[videoId].filter(client => client !== res);
+      if (global.progressClients[videoId].length === 0) {
+        delete global.progressClients[videoId];
+      }
+    }
+  });
+});
+
+// Helper function to send progress updates
+function sendProgress(videoId, message, percent = null) {
+  if (!global.progressClients || !global.progressClients[videoId]) {
+    return;
+  }
+  
+  const data = { type: 'progress', message, percent, timestamp: new Date().toISOString() };
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  
+  global.progressClients[videoId].forEach(client => {
+    try {
+      client.write(payload);
+    } catch (error) {
+      console.error('Error sending progress:', error);
+    }
+  });
+}
 
 module.exports = router;

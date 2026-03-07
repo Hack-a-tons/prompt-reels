@@ -600,25 +600,43 @@ app.get('/analyze', (req, res) => {
         }
 
         async function detectScenes(videoId, language) {
-            const response = await fetch('/api/detect-scenes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    videoId,
-                    threshold: 0.4,
-                    extractFrames: true,
-                    describeScenes: true,
-                    transcribeAudio: true,
-                    language: language
-                })
-            });
+            // Connect to SSE for progress updates
+            const eventSource = new EventSource(`/api/progress/${videoId}`);
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'progress' && data.message) {
+                    updateProgress(data.percent || 50, 3, data.message);
+                }
+            };
+            
+            eventSource.onerror = () => {
+                eventSource.close();
+            };
+            
+            try {
+                const response = await fetch('/api/detect-scenes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        videoId,
+                        threshold: 0.4,
+                        extractFrames: true,
+                        describeScenes: true,
+                        transcribeAudio: true,
+                        language: language
+                    })
+                });
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Scene detection failed');
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Scene detection failed');
+                }
+
+                return response.json();
+            } finally {
+                eventSource.close();
             }
-
-            return response.json();
         }
 
         function updateProgress(percent, step, message) {
