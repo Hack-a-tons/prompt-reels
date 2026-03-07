@@ -2338,7 +2338,7 @@ const startServer = async () => {
     server = app.listen(config.port, () => {
       log.info(`Prompt Reels API running on port ${config.port}`);
       log.info(`Environment: ${config.nodeEnv}`);
-      log.info(`Using Gemini model: ${config.geminiModel}`);
+      log.info(`Primary AI: ${config.aiProvider === 'azure' ? `Azure ${config.azureOpenAI.deploymentName}` : `Gemini ${config.geminiModel}`}`);
       log.info(`Weave project: ${config.wandbProject}`);
       log.info(`Health check: http://localhost:${config.port}/health`);
     });
