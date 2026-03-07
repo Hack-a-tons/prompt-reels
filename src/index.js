@@ -601,7 +601,7 @@ app.get('/analyze', (req, res) => {
 
         async function detectScenes(videoId, language) {
             // Connect to SSE for progress updates
-            const eventSource = new EventSource(`/api/progress/${videoId}`);
+            const eventSource = new EventSource('/api/progress/' + videoId);
             
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
