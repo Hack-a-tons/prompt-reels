@@ -24,6 +24,14 @@ const initClients = () => {
   }
   
   // Don't log here - weave.js will log AI provider during initialization
+  console.log(`✓ AI clients initialized (Primary: ${config.aiProvider})`);
+  if (config.aiProvider === 'azure') {
+    console.log(`  → Azure: ${config.azureOpenAI.deploymentName}`);
+    console.log(`  → Gemini fallback: ${config.geminiModel}`);
+  } else {
+    console.log(`  → Gemini: ${config.geminiModel}`);
+    console.log(`  → Azure fallback: ${config.azureOpenAI.deploymentName}`);
+  }
 };
 
 /**
@@ -38,6 +46,8 @@ const describeImage = async (imagePath, prompt) => {
       if (!azureClient) {
         throw new Error('Azure OpenAI client not initialized');
       }
+      
+      console.log(`🤖 Using Azure OpenAI: ${config.azureOpenAI.deploymentName}`);
       
       const response = await azureClient.chat.completions.create({
         model: config.azureOpenAI.deploymentName,
@@ -64,6 +74,8 @@ const describeImage = async (imagePath, prompt) => {
       if (!geminiClient) {
         throw new Error('Gemini client not initialized');
       }
+      
+      console.log(`🤖 Using Google Gemini: ${config.geminiModel}`);
       
       const model = geminiClient.getGenerativeModel({ model: config.geminiModel });
       const result = await model.generateContent([

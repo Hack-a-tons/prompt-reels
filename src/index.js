@@ -46,6 +46,8 @@ app.get('/health', (req, res) => {
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     config: {
+      aiProvider: config.aiProvider,
+      azureModel: config.azureOpenAI.deploymentName,
       geminiModel: config.geminiModel,
       wandbProject: config.wandbProject,
       hasGeminiKey: !!config.googleApiKey,
