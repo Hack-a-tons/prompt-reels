@@ -56,7 +56,7 @@ Return ONLY the new prompt text, nothing else.`;
           content: evolutionPrompt,
         },
       ],
-      max_tokens: 200,
+      max_completion_tokens: 200,
       temperature: 0.7, // Some creativity, but not too wild
     });
 
@@ -138,7 +138,7 @@ Return ONLY the new prompt text, nothing else.`;
           content: mutationPrompt,
         },
       ],
-      max_tokens: 200,
+      max_completion_tokens: 200,
       temperature: 0.5, // Less creative than crossover
     });
 

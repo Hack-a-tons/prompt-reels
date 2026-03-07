@@ -1121,7 +1121,7 @@ AI_PROVIDER=gemini   # Use Google Gemini
 - Embeddings use hash-based similarity (no external API needed)
 
 **Current configuration:**
-- **Azure OpenAI**: GPT-4.1 deployment (recommended)
+- **Azure OpenAI**: GPT-5.4 deployment (recommended)
 - **Google Gemini**: gemini-2.5-pro
 - **Embeddings**: Hash-based (no quota limits)
 

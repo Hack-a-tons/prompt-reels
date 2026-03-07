@@ -20,8 +20,8 @@ const config = {
   azureOpenAI: {
     apiKey: process.env.AZURE_OPENAI_API_KEY,
     endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-    apiVersion: process.env.AZURE_API_VERSION || '2025-01-01-preview',
-    deploymentName: process.env.AZURE_DEPLOYMENT_NAME || 'gpt-4.1',
+    apiVersion: process.env.AZURE_API_VERSION,
+    deploymentName: process.env.AZURE_DEPLOYMENT_NAME,
   },
 
   // Directories
@@ -42,8 +42,19 @@ const config = {
 const validateConfig = () => {
   const errors = [];
 
-  if (config.aiProvider === 'azure' && !config.azureOpenAI.apiKey) {
-    errors.push('AI_PROVIDER is set to azure but AZURE_OPENAI_API_KEY is not configured');
+  if (config.aiProvider === 'azure') {
+    if (!config.azureOpenAI.apiKey) {
+      errors.push('AI_PROVIDER is set to azure but AZURE_OPENAI_API_KEY is not configured');
+    }
+    if (!config.azureOpenAI.endpoint) {
+      errors.push('AI_PROVIDER is set to azure but AZURE_OPENAI_ENDPOINT is not configured');
+    }
+    if (!config.azureOpenAI.deploymentName) {
+      errors.push('AI_PROVIDER is set to azure but AZURE_DEPLOYMENT_NAME is not configured');
+    }
+    if (!config.azureOpenAI.apiVersion) {
+      errors.push('AI_PROVIDER is set to azure but AZURE_API_VERSION is not configured');
+    }
   }
   
   if (config.aiProvider === 'gemini' && !config.googleApiKey) {

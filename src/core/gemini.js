@@ -55,7 +55,7 @@ const describeImage = async (imagePath, prompt) => {
             ],
           },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
       
       return response.choices[0].message.content;
@@ -157,7 +157,7 @@ Do NOT start with phrases like "In this scene" or "This scene shows". Just descr
             content,
           },
         ],
-        max_tokens: 300,
+        max_completion_tokens: 300,
       });
       
       return response.choices[0].message.content;
@@ -247,7 +247,7 @@ Return ONLY the title text, nothing else.`;
       const response = await azureClient.chat.completions.create({
         model: config.azureOpenAI.deploymentName,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 50,
+        max_completion_tokens: 50,
         temperature: 0.4,
       });
       
@@ -316,7 +316,7 @@ Return ONLY the title text, nothing else.`;
       const response = await azureClient.chat.completions.create({
         model: config.azureOpenAI.deploymentName,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 50,
+        max_completion_tokens: 50,
         temperature: 0.4,
       });
       
@@ -389,7 +389,7 @@ Return ONLY the formatted text with markdown. No explanations or metadata.`;
             content: prompt,
           },
         ],
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
         temperature: 0.3, // Lower temperature for more consistent formatting
       });
       
