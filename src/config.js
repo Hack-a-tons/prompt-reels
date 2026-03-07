@@ -30,7 +30,7 @@ const config = {
   dataDir: process.env.DATA_DIR || './data',
 
   // Upload limits
-  maxFileSize: 200 * 1024 * 1024, // 200MB
+  maxFileSize: 250 * 1024 * 1024, // 250MB
 
   // News Fetching APIs
   tavilyApiKey: process.env.TAVILY_API_KEY,

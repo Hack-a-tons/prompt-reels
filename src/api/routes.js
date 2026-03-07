@@ -181,8 +181,8 @@ router.post('/download-video', async (req, res) => {
       url: url,
       responseType: 'stream',
       timeout: 300000, // 5 minutes
-      maxContentLength: 200 * 1024 * 1024, // 200MB limit
-      maxBodyLength: 200 * 1024 * 1024
+      maxContentLength: 250 * 1024 * 1024, // 250MB limit
+      maxBodyLength: 250 * 1024 * 1024
     });
 
     const writer = fs.createWriteStream(videoPath);

@@ -424,9 +424,9 @@ app.get('/analyze', (req, res) => {
                 return;
             }
 
-            // Check file size if uploading (200MB limit)
-            if (selectedFile && selectedFile.size > 200 * 1024 * 1024) {
-                showError('File too large. Maximum size is 200MB.');
+            // Check file size if uploading (250MB limit)
+            if (selectedFile && selectedFile.size > 250 * 1024 * 1024) {
+                showError('File too large. Maximum size is 250MB.');
                 return;
             }
 
