@@ -265,7 +265,7 @@ app.get('/analyze', (req, res) => {
         <div class="upload-area" id="uploadArea">
             <div class="upload-icon">📹</div>
             <div class="upload-text">Click to upload or drag and drop</div>
-            <div class="upload-hint">MP4, MOV, AVI, MKV, WebM (max 200MB)</div>
+            <div class="upload-hint">MP4, MOV, AVI, MKV, WebM (max 250MB)</div>
             <input type="file" id="fileInput" accept="video/*">
         </div>
 
