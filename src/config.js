@@ -22,6 +22,8 @@ const config = {
     endpoint: process.env.AZURE_OPENAI_ENDPOINT,
     apiVersion: process.env.AZURE_API_VERSION,
     deploymentName: process.env.AZURE_DEPLOYMENT_NAME,
+    whisperKey: process.env.WHISPER_KEY || process.env.AZURE_OPENAI_API_KEY,
+    whisperEndpoint: process.env.WHISPER_ENDPOINT || '',
     whisperDeploymentName:
       process.env.AZURE_WHISPER_DEPLOYMENT_NAME ||
       process.env.AZURE_TRANSCRIPTION_DEPLOYMENT_NAME ||

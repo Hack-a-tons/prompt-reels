@@ -6,6 +6,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { URL } = require('url');
 const FormData = require('form-data');
 const axios = require('axios');
 const config = require('../config');
@@ -49,11 +50,40 @@ let lastWhisperCall = 0;
 const WHISPER_MIN_INTERVAL = 20000; // 20 seconds
 
 const getWhisperDeploymentName = () => {
+  if (config.azureOpenAI.whisperEndpoint) {
+    return null;
+  }
+
   if (config.azureOpenAI.whisperDeploymentName) {
     return config.azureOpenAI.whisperDeploymentName;
   }
 
   return config.azureOpenAI.deploymentName || null;
+};
+
+const getWhisperRequestConfig = () => {
+  if (config.azureOpenAI.whisperEndpoint) {
+    return {
+      url: config.azureOpenAI.whisperEndpoint,
+      apiKey: config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey,
+      source: 'WHISPER_ENDPOINT',
+      deploymentName: null,
+    };
+  }
+
+  const deploymentName = getWhisperDeploymentName();
+  if (!deploymentName) {
+    return null;
+  }
+
+  return {
+    url:
+      `${config.azureOpenAI.endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}` +
+      `/audio/transcriptions?api-version=${encodeURIComponent(config.azureOpenAI.whisperApiVersion)}`,
+    apiKey: config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey,
+    source: 'AZURE_DEPLOYMENT_NAME',
+    deploymentName,
+  };
 };
 
 /**
@@ -93,14 +123,14 @@ const extractAudioSegment = async (videoPath, start, end, outputPath) => {
  * @returns {Promise<Object|null>} Object with {text, language} or null if no speech detected
  */
 const transcribeAudio = async (audioPath, targetLanguage = null) => {
-  if (!config.azureOpenAI.apiKey) {
-    log.warn('Azure OpenAI not configured, skipping transcription');
+  const whisperRequest = getWhisperRequestConfig();
+  if (!whisperRequest?.apiKey) {
+    log.warn('Whisper API key is not configured, skipping transcription');
     return null;
   }
 
-  const whisperDeploymentName = getWhisperDeploymentName();
-  if (!whisperDeploymentName) {
-    log.warn('Azure deployment not configured for transcription. Set AZURE_DEPLOYMENT_NAME or override with AZURE_WHISPER_DEPLOYMENT_NAME.');
+  if (!whisperRequest?.url) {
+    log.warn('Whisper endpoint is not configured. Set WHISPER_ENDPOINT or Azure deployment settings for transcription.');
     return null;
   }
   
@@ -152,16 +182,12 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
       try {
         lastWhisperCall = Date.now(); // Track call time
         
-        const transcriptionUrl =
-          `${config.azureOpenAI.endpoint}/openai/deployments/${encodeURIComponent(whisperDeploymentName)}` +
-          `/audio/transcriptions?api-version=${encodeURIComponent(config.azureOpenAI.whisperApiVersion)}`;
-
         const response = await axios.post(
-          transcriptionUrl,
+          whisperRequest.url,
           formData,
           {
             headers: {
-              'api-key': config.azureOpenAI.apiKey,
+              'api-key': whisperRequest.apiKey,
               ...formData.getHeaders(),
             },
             timeout: 60000, // 60 seconds
@@ -221,9 +247,19 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
             errorText.toLowerCase().includes('not supported')
           );
         if (status === 404 || status === 401 || status === 403 || isUnsupportedOperation) {
+          const endpointHost = (() => {
+            try {
+              return new URL(whisperRequest.url).host;
+            } catch (urlError) {
+              return 'unknown-host';
+            }
+          })();
           const fatalError = new Error(
-            `Azure transcription request failed with ${status} for deployment "${whisperDeploymentName}". ` +
-            `This code uses AZURE_DEPLOYMENT_NAME by default${config.azureOpenAI.whisperDeploymentName ? ' (overridden by AZURE_WHISPER_DEPLOYMENT_NAME)' : ''}.`
+            whisperRequest.deploymentName
+              ? `Azure transcription request failed with ${status} for deployment "${whisperRequest.deploymentName}". ` +
+                `This code uses ${whisperRequest.source} by default${config.azureOpenAI.whisperDeploymentName ? ' (overridden by AZURE_WHISPER_DEPLOYMENT_NAME)' : ''}.`
+              : `Whisper endpoint request failed with ${status} at ${endpointHost}. ` +
+                `This code is using WHISPER_ENDPOINT directly.`
           );
           fatalError.code = 'AZURE_TRANSCRIPTION_CONFIG_ERROR';
           fatalError.status = status;
@@ -239,6 +275,9 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
     
     return null;
   } catch (error) {
+    if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
+      throw error;
+    }
     log.error(`Transcription error: ${error.message}`);
     return null;
   }

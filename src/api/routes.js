@@ -110,9 +110,13 @@ function normalizeLanguageName(language) {
 }
 
 function ensureTranscriptionConfigured() {
+  if (config.azureOpenAI.whisperEndpoint && (config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey)) {
+    return 'WHISPER_ENDPOINT';
+  }
+
   const whisperDeploymentName = getWhisperDeploymentName();
   if (!config.azureOpenAI.apiKey || !whisperDeploymentName) {
-    throw new Error('Audio transcription is not configured. Set AZURE_DEPLOYMENT_NAME or override it with AZURE_WHISPER_DEPLOYMENT_NAME.');
+    throw new Error('Audio transcription is not configured. Set WHISPER_ENDPOINT/WHISPER_KEY or Azure deployment settings.');
   }
 
   return whisperDeploymentName;
@@ -434,10 +438,10 @@ router.post('/detect-scenes', async (req, res) => {
         let whisperDetectedLang = null;
         for (let i = 0; i < Math.min(3, scenes.length) && !whisperDetectedLang; i++) {
           const scene = scenes[i];
-          try {
-            const transcript = await transcribeSceneAudio(
-              videoPath,
-              scene.sceneId,
+      try {
+        const transcript = await transcribeSceneAudio(
+          videoPath,
+          scene.sceneId,
               scene.start,
               scene.end,
               config.outputDir,
@@ -450,6 +454,9 @@ router.post('/detect-scenes', async (req, res) => {
               break;
             }
           } catch (error) {
+            if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
+              throw error;
+            }
             console.log(`  - Scene ${scene.sceneId}: No speech for detection`);
           }
         }
@@ -508,6 +515,9 @@ router.post('/detect-scenes', async (req, res) => {
               console.log(`  - Scene ${scene.sceneId}: No speech detected`);
             }
           } catch (error) {
+            if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
+              throw error;
+            }
             console.error(`  ✗ Failed to transcribe scene ${scene.sceneId}:`, error.message);
           }
         }
@@ -2364,16 +2374,19 @@ async function runReprocessJob(videoId) {
         null
       );
       
-      if (transcript && transcript.text && transcript.text.trim()) {
-        scene.transcript = transcript;
-        if (!targetLanguage) {
-          targetLanguage = normalizeLanguageName(transcript.language) || detectLanguageFromText(transcript.text);
+        if (transcript && transcript.text && transcript.text.trim()) {
+          scene.transcript = transcript;
+          if (!targetLanguage) {
+            targetLanguage = normalizeLanguageName(transcript.language) || detectLanguageFromText(transcript.text);
+          }
         }
+      } catch (error) {
+        if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
+          throw error;
+        }
+        console.log(`  - Scene ${scene.sceneId}: Transcription failed`);
       }
-    } catch (error) {
-      console.log(`  - Scene ${scene.sceneId}: Transcription failed`);
     }
-  }
 
   if (!targetLanguage) {
     const firstTranscript = scenes.find(scene => scene.transcript?.text)?.transcript?.text;
