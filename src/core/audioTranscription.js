@@ -53,12 +53,7 @@ const getWhisperDeploymentName = () => {
     return config.azureOpenAI.whisperDeploymentName;
   }
 
-  const primaryDeployment = config.azureOpenAI.deploymentName || '';
-  if (/whisper|transcri/i.test(primaryDeployment)) {
-    return primaryDeployment;
-  }
-
-  return null;
+  return config.azureOpenAI.deploymentName || null;
 };
 
 /**
@@ -105,7 +100,7 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
 
   const whisperDeploymentName = getWhisperDeploymentName();
   if (!whisperDeploymentName) {
-    log.warn('Azure Whisper deployment not configured. Set AZURE_WHISPER_DEPLOYMENT_NAME to enable transcription.');
+    log.warn('Azure deployment not configured for transcription. Set AZURE_DEPLOYMENT_NAME or override with AZURE_WHISPER_DEPLOYMENT_NAME.');
     return null;
   }
   
@@ -217,6 +212,15 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
         const errorBody = typeof error.response?.data === 'string'
           ? error.response.data
           : JSON.stringify(error.response?.data || {});
+        if (status === 404 || status === 401 || status === 403) {
+          const fatalError = new Error(
+            `Azure transcription request failed with ${status} for deployment "${whisperDeploymentName}". ` +
+            `This code uses AZURE_DEPLOYMENT_NAME by default${config.azureOpenAI.whisperDeploymentName ? ' (overridden by AZURE_WHISPER_DEPLOYMENT_NAME)' : ''}.`
+          );
+          fatalError.code = 'AZURE_TRANSCRIPTION_CONFIG_ERROR';
+          fatalError.status = status;
+          throw fatalError;
+        }
         const trimmedBody = errorBody && errorBody !== '{}'
           ? ` body=${errorBody.substring(0, 180)}`
           : '';
@@ -273,7 +277,11 @@ const transcribeSceneAudio = async (videoPath, sceneId, start, end, tempDir, tar
     if (fs.existsSync(audioPath)) {
       fs.unlinkSync(audioPath);
     }
-    
+
+    if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
+      throw error;
+    }
+
     log.error(`Failed to transcribe scene ${sceneId}: ${error.message}`);
     return null;
   }

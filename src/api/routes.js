@@ -112,7 +112,7 @@ function normalizeLanguageName(language) {
 function ensureTranscriptionConfigured() {
   const whisperDeploymentName = getWhisperDeploymentName();
   if (!config.azureOpenAI.apiKey || !whisperDeploymentName) {
-    throw new Error('Audio transcription is not configured. Set AZURE_WHISPER_DEPLOYMENT_NAME to a valid Azure Whisper deployment.');
+    throw new Error('Audio transcription is not configured. Set AZURE_DEPLOYMENT_NAME or override it with AZURE_WHISPER_DEPLOYMENT_NAME.');
   }
 
   return whisperDeploymentName;
