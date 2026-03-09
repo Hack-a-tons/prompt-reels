@@ -22,6 +22,15 @@ const config = {
     endpoint: process.env.AZURE_OPENAI_ENDPOINT,
     apiVersion: process.env.AZURE_API_VERSION,
     deploymentName: process.env.AZURE_DEPLOYMENT_NAME,
+    whisperDeploymentName:
+      process.env.AZURE_WHISPER_DEPLOYMENT_NAME ||
+      process.env.AZURE_TRANSCRIPTION_DEPLOYMENT_NAME ||
+      process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT_NAME ||
+      '',
+    whisperApiVersion:
+      process.env.AZURE_WHISPER_API_VERSION ||
+      process.env.AZURE_API_VERSION ||
+      '2024-06-01',
   },
 
   // Directories

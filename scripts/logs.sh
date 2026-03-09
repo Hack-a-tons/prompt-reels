@@ -44,4 +44,8 @@ if [[ $# -gt 0 ]]; then
     LOG_ARGS=$(printf '%q ' "$@")
 fi
 
+if [[ " $LOG_ARGS " != *" --timestamps "* ]] && [[ " $LOG_ARGS " != *" -t "* ]]; then
+    LOG_ARGS="--timestamps $LOG_ARGS"
+fi
+
 ssh "$SERVER" "cd $PROJECT_DIR && docker compose logs $LOG_ARGS"

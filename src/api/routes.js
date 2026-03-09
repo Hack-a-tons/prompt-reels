@@ -10,7 +10,7 @@ const { describeImage, describeScene, generateSceneTitle, generateVideoTitle, fo
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
 const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
-const { transcribeSceneAudio } = require('../core/audioTranscription');
+const { transcribeSceneAudio, getWhisperDeploymentName } = require('../core/audioTranscription');
 const { fetchNewsArticle } = require('../core/newsFetcher');
 const {
   listArticles,
@@ -107,6 +107,23 @@ function normalizeLanguageName(language) {
 
   const normalized = language.toLowerCase().trim();
   return languageMap[normalized] || `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
+}
+
+function ensureTranscriptionConfigured() {
+  const whisperDeploymentName = getWhisperDeploymentName();
+  if (!config.azureOpenAI.apiKey || !whisperDeploymentName) {
+    throw new Error('Audio transcription is not configured. Set AZURE_WHISPER_DEPLOYMENT_NAME to a valid Azure Whisper deployment.');
+  }
+
+  return whisperDeploymentName;
+}
+
+function getReprocessJobs() {
+  if (!global.reprocessJobs) {
+    global.reprocessJobs = {};
+  }
+
+  return global.reprocessJobs;
 }
 
 // Configure multer for video uploads
@@ -408,6 +425,7 @@ router.post('/detect-scenes', async (req, res) => {
       
       // Step 1: Transcribe audio FIRST (if enabled) to detect language before describing
       if (transcribeAudio) {
+        ensureTranscriptionConfigured();
         const transcriptionStart = Date.now();
         console.log(`\n🎙️ Transcribing audio to detect language...`);
         
@@ -845,6 +863,7 @@ router.get('/scenes/:videoId', (req, res) => {
     }
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
+    const reprocessInProgress = Boolean(getReprocessJobs()[videoId]?.status === 'running');
     
     // Determine video path based on videoId type
     // Articles: article-* → /api/articles/:id.mp4
@@ -1147,9 +1166,12 @@ router.get('/scenes/:videoId', (req, res) => {
         </div>
         ${!videoId.startsWith('article-') && !sceneData.scenes.some(s => s.transcript) ? `
         <div class="stat">
-          <button id="reprocessBtn" style="background: #1d9bf0; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em;">
-            🔄 Add Transcription
+          <button id="reprocessBtn" ${reprocessInProgress ? 'disabled' : ''} style="background: #1d9bf0; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; ${reprocessInProgress ? 'opacity: 0.8;' : ''}">
+            ${reprocessInProgress ? '⏳ Transcription in progress...' : '🔄 Add Transcription'}
           </button>
+          <div id="reprocessStatus" style="margin-top: 8px; font-size: 0.8em; color: #71767b;">
+            ${reprocessInProgress ? 'Connecting to live progress...' : ''}
+          </div>
         </div>
         ` : ''}
       </div>
@@ -1245,6 +1267,65 @@ router.get('/scenes/:videoId', (req, res) => {
 
 	    // Reprocess button handler
 	    const reprocessBtn = document.getElementById('reprocessBtn');
+	    const reprocessStatus = document.getElementById('reprocessStatus');
+	    const reprocessVideoId = '${videoId}';
+	    const reprocessAlreadyRunning = ${JSON.stringify(reprocessInProgress)};
+	    let reprocessEventSource = null;
+	    function setReprocessState(label, statusText, disabled) {
+	      if (reprocessBtn && label) {
+	        reprocessBtn.innerHTML = label;
+	      }
+	      if (reprocessBtn) {
+	        reprocessBtn.disabled = disabled;
+	        reprocessBtn.style.opacity = disabled ? '0.8' : '1';
+	        reprocessBtn.style.cursor = disabled ? 'default' : 'pointer';
+	      }
+	      if (reprocessStatus && statusText !== undefined) {
+	        reprocessStatus.textContent = statusText;
+	      }
+	    }
+	    function stopReprocessStream() {
+	      if (reprocessEventSource) {
+	        reprocessEventSource.close();
+	        reprocessEventSource = null;
+	      }
+	    }
+	    function startReprocessStream() {
+	      if (reprocessEventSource) {
+	        return;
+	      }
+	      reprocessEventSource = new EventSource('/api/progress/' + reprocessVideoId);
+	      reprocessEventSource.onmessage = (event) => {
+	        const data = JSON.parse(event.data);
+	        if (data.type === 'connected') {
+	          if (reprocessStatus && !reprocessStatus.textContent) {
+	            reprocessStatus.textContent = 'Waiting for progress updates...';
+	          }
+	          return;
+	        }
+	        if (!data.message) {
+	          return;
+	        }
+	        const percentLabel = typeof data.percent === 'number' ? '⏳ ' + Math.round(data.percent) + '%' : '⏳ Processing...';
+	        setReprocessState(percentLabel, data.message, true);
+	        if (data.message.startsWith('❌')) {
+	          stopReprocessStream();
+	          setReprocessState('🔄 Add Transcription', data.message, false);
+	          alert(data.message);
+	          return;
+	        }
+	        if (typeof data.percent === 'number' && data.percent >= 100) {
+	          stopReprocessStream();
+	          setReprocessState('✅ Complete', 'Reloading page...', true);
+	          setTimeout(() => location.reload(), 1000);
+	        }
+	      };
+	      reprocessEventSource.onerror = () => {
+	        if (reprocessBtn && reprocessBtn.disabled) {
+	          reprocessStatus.textContent = 'Waiting for processing to finish...';
+	        }
+	      };
+	    }
 	    async function readErrorMessage(response) {
 	      const body = await response.text();
 	      try {
@@ -1256,13 +1337,16 @@ router.get('/scenes/:videoId', (req, res) => {
 	      }
 	    }
 	    if (reprocessBtn) {
+	      if (reprocessAlreadyRunning) {
+	        startReprocessStream();
+	      }
 	      reprocessBtn.addEventListener('click', async () => {
 	        if (!confirm('Re-process this video to add transcription? This may take a few minutes.')) {
           return;
         }
         
-        reprocessBtn.disabled = true;
-        reprocessBtn.innerHTML = '<span style="display:inline-block;animation:spin 1s linear infinite">⏳</span> Processing...';
+        startReprocessStream();
+        setReprocessState('<span style="display:inline-block;animation:spin 1s linear infinite">⏳</span> Starting...', 'Starting transcription...', true);
         
         try {
           const response = await fetch('/api/reprocess', {
@@ -1272,18 +1356,21 @@ router.get('/scenes/:videoId', (req, res) => {
           });
           
 	          if (response.ok) {
-	            alert('Processing complete! Reloading page...');
-	            location.reload();
+	            const payload = await response.json();
+	            const message = payload.started === false
+	              ? 'Transcription is already running. Waiting for progress updates...'
+	              : 'Transcription started. This page will reload when it finishes.';
+	            setReprocessState('⏳ Processing...', message, true);
 	          } else {
 	            const errorMessage = await readErrorMessage(response);
+	            stopReprocessStream();
 	            alert('Error: ' + errorMessage);
-	            reprocessBtn.disabled = false;
-	            reprocessBtn.innerHTML = '🔄 Add Transcription';
+	            setReprocessState('🔄 Add Transcription', errorMessage, false);
 	          }
         } catch (error) {
+          stopReprocessStream();
           alert('Error: ' + error.message);
-          reprocessBtn.disabled = false;
-          reprocessBtn.innerHTML = '🔄 Add Transcription';
+          setReprocessState('🔄 Add Transcription', error.message, false);
         }
       });
     }
@@ -2208,172 +2295,219 @@ router.get('/queue/status', (req, res) => {
   }
 });
 
+async function runReprocessJob(videoId) {
+  // Find video file
+  const videoFiles = fs.readdirSync(config.uploadDir)
+    .filter(f => f.startsWith(videoId));
+  
+  if (videoFiles.length === 0) {
+    throw new Error('Video not found');
+  }
+
+  const videoPath = path.join(config.uploadDir, videoFiles[0]);
+  const outputPath = path.join(config.outputDir, `${videoId}_scenes.json`);
+  let existingSceneData = {};
+  let scenes = [];
+  let threshold = 0.4;
+
+  if (fs.existsSync(outputPath)) {
+    existingSceneData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+    threshold = typeof existingSceneData.threshold === 'number' ? existingSceneData.threshold : threshold;
+    scenes = Array.isArray(existingSceneData.scenes)
+      ? existingSceneData.scenes.map((scene, index) => ({
+          ...scene,
+          sceneId: scene.sceneId || index + 1,
+          start: Number(scene.start) || 0,
+          end: Number(scene.end) || 0,
+          duration: typeof scene.duration === 'number'
+            ? scene.duration
+            : Math.max(0, (Number(scene.end) || 0) - (Number(scene.start) || 0)),
+          frames: Array.isArray(scene.frames) ? scene.frames : [],
+        }))
+      : [];
+  }
+
+  sendProgress(videoId, '🔄 Re-processing video...', 5);
+
+  if (scenes.length === 0) {
+    sendProgress(videoId, '🎬 Detecting scenes...', 15);
+    scenes = await detectScenes(videoPath, threshold);
+    sendProgress(videoId, `✓ Detected ${scenes.length} scenes`, 25);
+  } else {
+    sendProgress(videoId, `✓ Loaded ${scenes.length} existing scenes`, 25);
+  }
+
+  const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
+  const shouldExtractFrames = scenes.some(scene => !Array.isArray(scene.frames) || scene.frames.length === 0);
+  if (shouldExtractFrames) {
+    sendProgress(videoId, '📸 Extracting frames...', 35);
+    scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+  } else {
+    sendProgress(videoId, '✓ Reusing existing frames', 35);
+  }
+
+  ensureTranscriptionConfigured();
+  sendProgress(videoId, '🎙️ Transcribing audio...', 50);
+  let targetLanguage = normalizeLanguageName(existingSceneData.language);
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    sendProgress(videoId, `🎙️ Transcribing scene ${i + 1}/${scenes.length}...`, 50 + (i / scenes.length * 30));
+    
+    try {
+      const transcript = await transcribeSceneAudio(
+        videoPath,
+        scene.sceneId,
+        scene.start,
+        scene.end,
+        config.outputDir,
+        null
+      );
+      
+      if (transcript && transcript.text && transcript.text.trim()) {
+        scene.transcript = transcript;
+        if (!targetLanguage) {
+          targetLanguage = normalizeLanguageName(transcript.language) || detectLanguageFromText(transcript.text);
+        }
+      }
+    } catch (error) {
+      console.log(`  - Scene ${scene.sceneId}: Transcription failed`);
+    }
+  }
+
+  if (!targetLanguage) {
+    const firstTranscript = scenes.find(scene => scene.transcript?.text)?.transcript?.text;
+    targetLanguage = firstTranscript ? detectLanguageFromText(firstTranscript) : 'English';
+  }
+
+  if (scenes.some(scene => scene.transcript?.text)) {
+    sendProgress(videoId, '📝 Formatting transcripts...', 82);
+    for (const scene of scenes) {
+      if (!scene.transcript?.text) {
+        continue;
+      }
+
+      try {
+        scene.transcript.formattedText = await formatTranscript(
+          scene.transcript.text,
+          targetLanguage
+        );
+      } catch (error) {
+        scene.transcript.formattedText = scene.transcript.text;
+      }
+    }
+  }
+
+  sendProgress(videoId, '📝 Refreshing scene metadata...', 90);
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    if (scene.description && !scene.title) {
+      try {
+        scene.title = await generateSceneTitle(
+          scene.description,
+          scene.transcript?.formattedText || scene.transcript?.text || null,
+          targetLanguage
+        );
+      } catch (titleError) {
+        scene.title = `Scene ${scene.sceneId}`;
+      }
+    }
+
+    if (!scene.title) {
+      scene.title = `Scene ${scene.sceneId}`;
+    }
+  }
+
+  const sceneData = {
+    ...existingSceneData,
+    videoId,
+    title: existingSceneData.title || 'Untitled Video',
+    sceneCount: scenes.length,
+    threshold,
+    language: targetLanguage || existingSceneData.language || 'English',
+    scenes: scenes.map(scene => ({
+      ...scene,
+      title: scene.title || `Scene ${scene.sceneId}`,
+      duration: typeof scene.duration === 'number'
+        ? scene.duration
+        : Math.max(0, scene.end - scene.start),
+      description: scene.description || null,
+      transcript: scene.transcript || null,
+      frames: Array.isArray(scene.frames) ? scene.frames : [],
+    })),
+    timestamp: new Date().toISOString(),
+  };
+  
+  fs.writeFileSync(outputPath, JSON.stringify(sceneData, null, 2));
+  sendProgress(videoId, '✅ Complete!', 100);
+
+  return { sceneCount: scenes.length, outputPath };
+}
+
 /**
  * POST /api/reprocess
  * Re-process an existing video with transcription
  */
 router.post('/reprocess', async (req, res) => {
-  let videoId = null;
-
-  try {
-    videoId = req.body?.videoId;
-    
-    if (!videoId) {
-      return res.status(400).json({ error: 'videoId is required' });
-    }
-
-    // Find video file
-    const videoFiles = fs.readdirSync(config.uploadDir)
-      .filter(f => f.startsWith(videoId));
-    
-    if (videoFiles.length === 0) {
-      return res.status(404).json({ error: 'Video not found' });
-    }
-
-    const videoPath = path.join(config.uploadDir, videoFiles[0]);
-    const outputPath = path.join(config.outputDir, `${videoId}_scenes.json`);
-    let existingSceneData = {};
-    let scenes = [];
-    let threshold = 0.4;
-
-    if (fs.existsSync(outputPath)) {
-      existingSceneData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-      threshold = typeof existingSceneData.threshold === 'number' ? existingSceneData.threshold : threshold;
-      scenes = Array.isArray(existingSceneData.scenes)
-        ? existingSceneData.scenes.map((scene, index) => ({
-            ...scene,
-            sceneId: scene.sceneId || index + 1,
-            start: Number(scene.start) || 0,
-            end: Number(scene.end) || 0,
-            duration: typeof scene.duration === 'number'
-              ? scene.duration
-              : Math.max(0, (Number(scene.end) || 0) - (Number(scene.start) || 0)),
-            frames: Array.isArray(scene.frames) ? scene.frames : [],
-          }))
-        : [];
-    }
-
-    sendProgress(videoId, '🔄 Re-processing video...', 5);
-
-    if (scenes.length === 0) {
-      sendProgress(videoId, '🎬 Detecting scenes...', 15);
-      scenes = await detectScenes(videoPath, threshold);
-      sendProgress(videoId, `✓ Detected ${scenes.length} scenes`, 25);
-    } else {
-      sendProgress(videoId, `✓ Loaded ${scenes.length} existing scenes`, 25);
-    }
-
-    const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
-    const shouldExtractFrames = scenes.some(scene => !Array.isArray(scene.frames) || scene.frames.length === 0);
-    if (shouldExtractFrames) {
-      sendProgress(videoId, '📸 Extracting frames...', 35);
-      scenes = await extractSceneFrames(videoPath, scenes, framesDir);
-    } else {
-      sendProgress(videoId, '✓ Reusing existing frames', 35);
-    }
-
-    sendProgress(videoId, '🎙️ Transcribing audio...', 50);
-    let targetLanguage = normalizeLanguageName(existingSceneData.language);
-
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i];
-      sendProgress(videoId, `🎙️ Transcribing scene ${i + 1}/${scenes.length}...`, 50 + (i / scenes.length * 30));
-      
-      try {
-        const transcript = await transcribeSceneAudio(
-          videoPath,
-          scene.sceneId,
-          scene.start,
-          scene.end,
-          config.outputDir,
-          null
-        );
-        
-        if (transcript && transcript.text && transcript.text.trim()) {
-          scene.transcript = transcript;
-          if (!targetLanguage) {
-            targetLanguage = normalizeLanguageName(transcript.language) || detectLanguageFromText(transcript.text);
-          }
-        }
-      } catch (error) {
-        console.log(`  - Scene ${scene.sceneId}: Transcription failed`);
-      }
-    }
-
-    if (!targetLanguage) {
-      const firstTranscript = scenes.find(scene => scene.transcript?.text)?.transcript?.text;
-      targetLanguage = firstTranscript ? detectLanguageFromText(firstTranscript) : 'English';
-    }
-
-    if (scenes.some(scene => scene.transcript?.text)) {
-      sendProgress(videoId, '📝 Formatting transcripts...', 82);
-      for (const scene of scenes) {
-        if (!scene.transcript?.text) {
-          continue;
-        }
-
-        try {
-          scene.transcript.formattedText = await formatTranscript(
-            scene.transcript.text,
-            targetLanguage
-          );
-        } catch (error) {
-          scene.transcript.formattedText = scene.transcript.text;
-        }
-      }
-    }
-
-    sendProgress(videoId, '📝 Refreshing scene metadata...', 90);
-    for (let i = 0; i < scenes.length; i++) {
-      const scene = scenes[i];
-      if (scene.description && !scene.title) {
-        try {
-          scene.title = await generateSceneTitle(
-            scene.description,
-            scene.transcript?.formattedText || scene.transcript?.text || null,
-            targetLanguage
-          );
-        } catch (titleError) {
-          scene.title = `Scene ${scene.sceneId}`;
-        }
-      }
-
-      if (!scene.title) {
-        scene.title = `Scene ${scene.sceneId}`;
-      }
-    }
-
-    const sceneData = {
-      ...existingSceneData,
-      videoId,
-      title: existingSceneData.title || 'Untitled Video',
-      sceneCount: scenes.length,
-      threshold,
-      language: targetLanguage || existingSceneData.language || 'English',
-      scenes: scenes.map(scene => ({
-        ...scene,
-        title: scene.title || `Scene ${scene.sceneId}`,
-        duration: typeof scene.duration === 'number'
-          ? scene.duration
-          : Math.max(0, scene.end - scene.start),
-        description: scene.description || null,
-        transcript: scene.transcript || null,
-        frames: Array.isArray(scene.frames) ? scene.frames : [],
-      })),
-      timestamp: new Date().toISOString(),
-    };
-    
-    fs.writeFileSync(outputPath, JSON.stringify(sceneData, null, 2));
-    sendProgress(videoId, '✅ Complete!', 100);
-
-    res.json({ success: true, sceneCount: scenes.length, outputPath });
-  } catch (error) {
-    console.error('Re-process error:', error);
-    if (videoId) {
-      sendProgress(videoId, `❌ Error: ${error.message}`, 0);
-    }
-    res.status(500).json({ error: error.message });
+  const videoId = req.body?.videoId;
+  
+  if (!videoId) {
+    return res.status(400).json({ error: 'videoId is required' });
   }
+
+  const jobs = getReprocessJobs();
+  if (jobs[videoId]?.status === 'running') {
+    return res.status(202).json({
+      success: true,
+      started: false,
+      inProgress: true,
+      videoId,
+      message: 'Re-processing already in progress',
+    });
+  }
+
+  jobs[videoId] = {
+    status: 'running',
+    videoId,
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    error: null,
+  };
+
+  res.status(202).json({
+    success: true,
+    started: true,
+    videoId,
+    message: 'Re-processing started',
+  });
+
+  (async () => {
+    try {
+      const result = await runReprocessJob(videoId);
+      jobs[videoId] = {
+        ...jobs[videoId],
+        status: 'completed',
+        updatedAt: new Date().toISOString(),
+        result,
+      };
+    } catch (error) {
+      console.error('Re-process error:', error);
+      jobs[videoId] = {
+        ...jobs[videoId],
+        status: 'failed',
+        updatedAt: new Date().toISOString(),
+        error: error.message,
+      };
+      sendProgress(videoId, `❌ Error: ${error.message}`, 0);
+    } finally {
+      setTimeout(() => {
+        const currentJob = jobs[videoId];
+        if (currentJob && currentJob.status !== 'running') {
+          delete jobs[videoId];
+        }
+      }, 5 * 60 * 1000);
+    }
+  })();
 });
 
 /**

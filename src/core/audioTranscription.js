@@ -9,6 +9,7 @@ const path = require('path');
 const FormData = require('form-data');
 const axios = require('axios');
 const config = require('../config');
+const { log } = require('../utils/logger');
 
 /**
  * Convert language names to ISO 639-1 codes for Whisper
@@ -46,6 +47,19 @@ const getLanguageCode = (language) => {
 // Rate limiting for Whisper API (3 requests per minute = 20s between calls)
 let lastWhisperCall = 0;
 const WHISPER_MIN_INTERVAL = 20000; // 20 seconds
+
+const getWhisperDeploymentName = () => {
+  if (config.azureOpenAI.whisperDeploymentName) {
+    return config.azureOpenAI.whisperDeploymentName;
+  }
+
+  const primaryDeployment = config.azureOpenAI.deploymentName || '';
+  if (/whisper|transcri/i.test(primaryDeployment)) {
+    return primaryDeployment;
+  }
+
+  return null;
+};
 
 /**
  * Extract audio segment from video
@@ -85,7 +99,13 @@ const extractAudioSegment = async (videoPath, start, end, outputPath) => {
  */
 const transcribeAudio = async (audioPath, targetLanguage = null) => {
   if (!config.azureOpenAI.apiKey) {
-    console.warn('Azure OpenAI not configured, skipping transcription');
+    log.warn('Azure OpenAI not configured, skipping transcription');
+    return null;
+  }
+
+  const whisperDeploymentName = getWhisperDeploymentName();
+  if (!whisperDeploymentName) {
+    log.warn('Azure Whisper deployment not configured. Set AZURE_WHISPER_DEPLOYMENT_NAME to enable transcription.');
     return null;
   }
   
@@ -125,7 +145,7 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
     
     if (timeSinceLastCall < WHISPER_MIN_INTERVAL) {
       const waitTime = WHISPER_MIN_INTERVAL - timeSinceLastCall;
-      console.log(`Whisper rate limit: waiting ${(waitTime / 1000).toFixed(1)}s before next call...`);
+      log.info(`Whisper rate limit: waiting ${(waitTime / 1000).toFixed(1)}s before next call`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
     
@@ -137,8 +157,12 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
       try {
         lastWhisperCall = Date.now(); // Track call time
         
+        const transcriptionUrl =
+          `${config.azureOpenAI.endpoint}/openai/deployments/${encodeURIComponent(whisperDeploymentName)}` +
+          `/audio/transcriptions?api-version=${encodeURIComponent(config.azureOpenAI.whisperApiVersion)}`;
+
         const response = await axios.post(
-          `${config.azureOpenAI.endpoint}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`,
+          transcriptionUrl,
           formData,
           {
             headers: {
@@ -174,11 +198,11 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
           const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000; // Exponential backoff
           
           if (attempt < maxAttempts) {
-            console.warn(`Rate limited (429), retrying in ${waitTime/1000}s (attempt ${attempt}/${maxAttempts})...`);
+            log.warn(`Whisper rate limited, retrying in ${waitTime / 1000}s (attempt ${attempt}/${maxAttempts})`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
             continue;
           } else {
-            console.error(`Rate limit exceeded after ${maxAttempts} attempts, skipping transcription`);
+            log.error(`Whisper rate limit exceeded after ${maxAttempts} attempts, skipping transcription`);
             return null;
           }
         }
@@ -189,14 +213,21 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
         }
         
         // Other errors
-        console.error(`Transcription failed: ${error.message}`);
+        const status = error.response?.status;
+        const errorBody = typeof error.response?.data === 'string'
+          ? error.response.data
+          : JSON.stringify(error.response?.data || {});
+        const trimmedBody = errorBody && errorBody !== '{}'
+          ? ` body=${errorBody.substring(0, 180)}`
+          : '';
+        log.error(`Transcription failed${status ? ` (${status})` : ''}: ${error.message}${trimmedBody}`);
         return null;
       }
     }
     
     return null;
   } catch (error) {
-    console.error(`Transcription error: ${error.message}`);
+    log.error(`Transcription error: ${error.message}`);
     return null;
   }
 };
@@ -243,13 +274,14 @@ const transcribeSceneAudio = async (videoPath, sceneId, start, end, tempDir, tar
       fs.unlinkSync(audioPath);
     }
     
-    console.error(`Failed to transcribe scene ${sceneId}: ${error.message}`);
+    log.error(`Failed to transcribe scene ${sceneId}: ${error.message}`);
     return null;
   }
 };
 
 module.exports = {
   extractAudioSegment,
+  getWhisperDeploymentName,
   transcribeAudio,
   transcribeSceneAudio,
 };
