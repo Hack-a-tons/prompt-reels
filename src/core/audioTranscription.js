@@ -48,6 +48,34 @@ const getLanguageCode = (language) => {
 // Rate limiting for Whisper API (3 requests per minute = 20s between calls)
 let lastWhisperCall = 0;
 const WHISPER_MIN_INTERVAL = 20000; // 20 seconds
+const WHISPER_429_BACKOFF_MS = [
+  20 * 1000,
+  40 * 1000,
+  60 * 1000,
+  2 * 60 * 1000,
+  3 * 60 * 1000,
+  5 * 60 * 1000,
+  10 * 60 * 1000,
+  15 * 60 * 1000,
+  20 * 60 * 1000,
+  30 * 60 * 1000,
+  60 * 60 * 1000,
+];
+
+const whisperQueue = [];
+let whisperQueueProcessing = false;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const formatWaitTime = (ms) => {
+  if (ms % (60 * 60 * 1000) === 0) {
+    return `${ms / (60 * 60 * 1000)}h`;
+  }
+  if (ms % (60 * 1000) === 0) {
+    return `${ms / (60 * 1000)}m`;
+  }
+  return `${ms / 1000}s`;
+};
 
 const getWhisperDeploymentName = () => {
   if (config.azureOpenAI.whisperEndpoint) {
@@ -61,10 +89,16 @@ const getWhisperDeploymentName = () => {
   return config.azureOpenAI.deploymentName || null;
 };
 
-const getWhisperRequestConfig = () => {
+const buildWhisperEndpointFromBase = (baseUrl, mode) => {
+  const url = new URL(baseUrl);
+  url.pathname = url.pathname.replace(/\/audio\/(translations|transcriptions)$/, `/audio/${mode}`);
+  return url.toString();
+};
+
+const getWhisperRequestConfig = (mode = 'transcriptions') => {
   if (config.azureOpenAI.whisperEndpoint) {
     return {
-      url: config.azureOpenAI.whisperEndpoint,
+      url: buildWhisperEndpointFromBase(config.azureOpenAI.whisperEndpoint, mode),
       apiKey: config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey,
       source: 'WHISPER_ENDPOINT',
       deploymentName: null,
@@ -79,12 +113,119 @@ const getWhisperRequestConfig = () => {
   return {
     url:
       `${config.azureOpenAI.endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}` +
-      `/audio/transcriptions?api-version=${encodeURIComponent(config.azureOpenAI.whisperApiVersion)}`,
+      `/audio/${mode}?api-version=${encodeURIComponent(config.azureOpenAI.whisperApiVersion)}`,
     apiKey: config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey,
     source: 'AZURE_DEPLOYMENT_NAME',
     deploymentName,
   };
 };
+
+const executeWhisperRequest = async ({ audioPath, mode, targetLanguage, whisperRequest }) => {
+  const formData = new FormData();
+  formData.append('file', fs.createReadStream(audioPath));
+  formData.append('model', 'whisper-1');
+
+  if (targetLanguage && mode === 'transcriptions') {
+    const langCode = getLanguageCode(targetLanguage);
+    if (langCode) {
+      formData.append('language', langCode);
+    }
+  }
+
+  formData.append('response_format', 'verbose_json');
+
+  lastWhisperCall = Date.now();
+  const response = await axios.post(
+    whisperRequest.url,
+    formData,
+    {
+      headers: {
+        'api-key': whisperRequest.apiKey,
+        ...formData.getHeaders(),
+      },
+      timeout: 60000,
+    }
+  );
+
+  const data = response.data;
+  const transcript = data.text?.trim() || '';
+  const detectedLanguage = data.language || 'unknown';
+
+  if (!transcript || transcript.length < 3) {
+    return null;
+  }
+
+  return {
+    text: transcript,
+    language: detectedLanguage,
+  };
+};
+
+const processWhisperQueue = async () => {
+  if (whisperQueueProcessing) {
+    return;
+  }
+
+  whisperQueueProcessing = true;
+
+  try {
+    while (whisperQueue.length > 0) {
+      const item = whisperQueue.shift();
+
+      try {
+        const timeSinceLastCall = Date.now() - lastWhisperCall;
+        if (timeSinceLastCall < WHISPER_MIN_INTERVAL) {
+          const waitTime = WHISPER_MIN_INTERVAL - timeSinceLastCall;
+          log.info(`Whisper rate limit: waiting ${(waitTime / 1000).toFixed(1)}s before next call`);
+          await sleep(waitTime);
+        }
+
+        let retryIndex = 0;
+        while (true) {
+          try {
+            const result = await executeWhisperRequest(item.job);
+            item.resolve(result);
+            break;
+          } catch (error) {
+            if (error.response?.status !== 429) {
+              throw error;
+            }
+
+            if (retryIndex >= WHISPER_429_BACKOFF_MS.length) {
+              const exhaustedError = new Error('Whisper rate limit retries exhausted');
+              exhaustedError.code = 'WHISPER_RATE_LIMIT_EXHAUSTED';
+              throw exhaustedError;
+            }
+
+            const waitTime = WHISPER_429_BACKOFF_MS[retryIndex];
+            retryIndex += 1;
+            log.warn(`Whisper rate limited, retrying in ${formatWaitTime(waitTime)} (attempt ${retryIndex}/${WHISPER_429_BACKOFF_MS.length})`);
+            await sleep(waitTime);
+          }
+        }
+      } catch (error) {
+        item.reject(error);
+      }
+    }
+  } finally {
+    whisperQueueProcessing = false;
+  }
+
+  if (whisperQueue.length > 0) {
+    setImmediate(() => {
+      processWhisperQueue().catch(error => {
+        log.error(`Whisper queue failed: ${error.message}`);
+      });
+    });
+  }
+};
+
+const enqueueWhisperRequest = (job) => new Promise((resolve, reject) => {
+  whisperQueue.push({ job, resolve, reject });
+  processWhisperQueue().catch(error => {
+    log.error(`Whisper queue failed: ${error.message}`);
+  });
+});
 
 /**
  * Extract audio segment from video
@@ -122,8 +263,8 @@ const extractAudioSegment = async (videoPath, start, end, outputPath) => {
  * @param {string} targetLanguage - Optional target language for transcription (default: auto-detect)
  * @returns {Promise<Object|null>} Object with {text, language} or null if no speech detected
  */
-const transcribeAudio = async (audioPath, targetLanguage = null) => {
-  const whisperRequest = getWhisperRequestConfig();
+const transcribeAudio = async (audioPath, targetLanguage = null, mode = 'transcriptions') => {
+  const whisperRequest = getWhisperRequestConfig(mode);
   if (!whisperRequest?.apiKey) {
     log.warn('Whisper API key is not configured, skipping transcription');
     return null;
@@ -147,137 +288,56 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
       return null;
     }
     
-    // Create form data
-    const formData = new FormData();
-    formData.append('file', fs.createReadStream(audioPath));
-    formData.append('model', 'whisper-1');
-    
-    // If target language specified, use it; otherwise let Whisper auto-detect
-    if (targetLanguage) {
-      // Convert language name to ISO 639-1 code if needed
-      const langCode = getLanguageCode(targetLanguage);
-      if (langCode) {
-        formData.append('language', langCode);
-      }
-    }
-    
-    // Use verbose_json to get detected language
-    formData.append('response_format', 'verbose_json');
-    
-    // Respect rate limit (3 requests per minute)
-    const now = Date.now();
-    const timeSinceLastCall = now - lastWhisperCall;
-    
-    if (timeSinceLastCall < WHISPER_MIN_INTERVAL) {
-      const waitTime = WHISPER_MIN_INTERVAL - timeSinceLastCall;
-      log.info(`Whisper rate limit: waiting ${(waitTime / 1000).toFixed(1)}s before next call`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-    }
-    
-    // Call Azure OpenAI Whisper API with retry on rate limit
-    let attempt = 0;
-    const maxAttempts = 3;
-    
-    while (attempt < maxAttempts) {
-      try {
-        lastWhisperCall = Date.now(); // Track call time
-        
-        const response = await axios.post(
-          whisperRequest.url,
-          formData,
-          {
-            headers: {
-              'api-key': whisperRequest.apiKey,
-              ...formData.getHeaders(),
-            },
-            timeout: 60000, // 60 seconds
-          }
-        );
-        
-        // verbose_json returns: { text, language, duration, segments, ... }
-        const data = response.data;
-        const transcript = data.text?.trim() || '';
-        const detectedLanguage = data.language || 'unknown';
-        
-        // Return null if transcript is empty or just noise markers
-        if (!transcript || transcript.length < 3) {
-          return null;
-        }
-        
-        return {
-          text: transcript,
-          language: detectedLanguage
-        };
-        
-      } catch (error) {
-        // Handle rate limiting (429)
-        if (error.response?.status === 429) {
-          attempt++;
-          
-          // Check for Retry-After header
-          const retryAfter = error.response.headers['retry-after'];
-          const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000; // Exponential backoff
-          
-          if (attempt < maxAttempts) {
-            log.warn(`Whisper rate limited, retrying in ${waitTime / 1000}s (attempt ${attempt}/${maxAttempts})`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-            continue;
-          } else {
-            log.error(`Whisper rate limit exceeded after ${maxAttempts} attempts, skipping transcription`);
-            return null;
-          }
-        }
-        
-        // Handle no speech detected
-        const errorData = error.response?.data;
-        const errorText = typeof errorData === 'string'
-          ? errorData
-          : JSON.stringify(errorData || {});
-        if (error.response?.status === 400 && errorText.toLowerCase().includes('no speech')) {
-          return null;
-        }
-        
-        // Other errors
-        const status = error.response?.status;
-        const errorBody = errorText;
-        const isUnsupportedOperation =
-          status === 400 &&
-          (
-            errorText.toLowerCase().includes('operationnotsupported') ||
-            errorText.toLowerCase().includes('not supported')
-          );
-        if (status === 404 || status === 401 || status === 403 || isUnsupportedOperation) {
-          const endpointHost = (() => {
-            try {
-              return new URL(whisperRequest.url).host;
-            } catch (urlError) {
-              return 'unknown-host';
-            }
-          })();
-          const fatalError = new Error(
-            whisperRequest.deploymentName
-              ? `Azure transcription request failed with ${status} for deployment "${whisperRequest.deploymentName}". ` +
-                `This code uses ${whisperRequest.source} by default${config.azureOpenAI.whisperDeploymentName ? ' (overridden by AZURE_WHISPER_DEPLOYMENT_NAME)' : ''}.`
-              : `Whisper endpoint request failed with ${status} at ${endpointHost}. ` +
-                `This code is using WHISPER_ENDPOINT directly.`
-          );
-          fatalError.code = 'AZURE_TRANSCRIPTION_CONFIG_ERROR';
-          fatalError.status = status;
-          throw fatalError;
-        }
-        const trimmedBody = errorBody && errorBody !== '{}'
-          ? ` body=${errorBody.substring(0, 180)}`
-          : '';
-        log.error(`Transcription failed${status ? ` (${status})` : ''}: ${error.message}${trimmedBody}`);
-        return null;
-      }
-    }
-    
-    return null;
+    return await enqueueWhisperRequest({
+      audioPath,
+      mode,
+      targetLanguage,
+      whisperRequest,
+    });
   } catch (error) {
     if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
       throw error;
     }
+
+    const errorData = error.response?.data;
+    const errorText = typeof errorData === 'string'
+      ? errorData
+      : JSON.stringify(errorData || {});
+    if (error.response?.status === 400 && errorText.toLowerCase().includes('no speech')) {
+      return null;
+    }
+
+    const status = error.response?.status;
+    const isUnsupportedOperation =
+      status === 400 &&
+      (
+        errorText.toLowerCase().includes('operationnotsupported') ||
+        errorText.toLowerCase().includes('not supported')
+      );
+    if (status === 404 || status === 401 || status === 403 || isUnsupportedOperation) {
+      const endpointHost = (() => {
+        try {
+          return new URL(whisperRequest.url).host;
+        } catch (urlError) {
+          return 'unknown-host';
+        }
+      })();
+      const fatalError = new Error(
+        whisperRequest.deploymentName
+          ? `Azure transcription request failed with ${status} for deployment "${whisperRequest.deploymentName}". ` +
+            `This code uses ${whisperRequest.source} by default${config.azureOpenAI.whisperDeploymentName ? ' (overridden by AZURE_WHISPER_DEPLOYMENT_NAME)' : ''}.`
+          : `Whisper endpoint request failed with ${status} at ${endpointHost}. ` +
+            `This code is using WHISPER_ENDPOINT directly.`
+      );
+      fatalError.code = 'AZURE_TRANSCRIPTION_CONFIG_ERROR';
+      fatalError.status = status;
+      throw fatalError;
+    }
+
+    const trimmedBody = errorText && errorText !== '{}'
+      ? ` body=${errorText.substring(0, 180)}`
+      : '';
+    log.error(`Transcription failed${status ? ` (${status})` : ''}: ${error.message}${trimmedBody}`);
     log.error(`Transcription error: ${error.message}`);
     return null;
   }
@@ -299,25 +359,38 @@ const transcribeSceneAudio = async (videoPath, sceneId, start, end, tempDir, tar
   try {
     // Extract audio segment
     await extractAudioSegment(videoPath, start, end, audioPath);
-    
-    // Transcribe audio with target language
-    const result = await transcribeAudio(audioPath, targetLanguage);
-    
+
+    const originalResult = await transcribeAudio(audioPath, targetLanguage, 'transcriptions');
+    let englishResult = null;
+
+    if (originalResult && originalResult.text) {
+      const normalizedOriginalLanguage = (originalResult.language || '').toLowerCase();
+      if (normalizedOriginalLanguage && normalizedOriginalLanguage !== 'en' && normalizedOriginalLanguage !== 'english') {
+        englishResult = await transcribeAudio(audioPath, null, 'translations');
+      }
+    }
+
     // Clean up temp audio file
     if (fs.existsSync(audioPath)) {
       fs.unlinkSync(audioPath);
     }
     
-    if (!result) {
+    if (!originalResult && !englishResult) {
       return null;
     }
-    
+
+    const originalText = originalResult?.text || null;
+    const englishText = englishResult?.text || originalResult?.text || null;
+
     return {
-      text: result.text,
+      text: englishText,
+      englishText,
+      originalText,
+      originalLanguage: originalResult?.language || null,
       start,
       end,
       duration: end - start,
-      language: result.language,
+      language: originalResult?.language || englishResult?.language || 'unknown',
     };
   } catch (error) {
     // Clean up on error

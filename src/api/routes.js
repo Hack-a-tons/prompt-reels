@@ -109,6 +109,110 @@ function normalizeLanguageName(language) {
   return languageMap[normalized] || `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function hasDistinctOriginalTranscript(transcript) {
+  if (!transcript || typeof transcript !== 'object') {
+    return false;
+  }
+
+  const originalText = (transcript.originalText || '').trim();
+  const englishText = (transcript.englishText || transcript.text || '').trim();
+  return Boolean(originalText && englishText && originalText !== englishText);
+}
+
+function getTranscriptText(transcript, variant = 'english', formatted = true) {
+  if (!transcript) {
+    return null;
+  }
+
+  if (typeof transcript === 'string') {
+    return transcript;
+  }
+
+  if (variant === 'original') {
+    if (formatted && transcript.formattedOriginalText) {
+      return transcript.formattedOriginalText;
+    }
+
+    return transcript.originalText
+      || (formatted ? transcript.formattedEnglishText || transcript.formattedText : null)
+      || transcript.englishText
+      || transcript.text
+      || null;
+  }
+
+  if (formatted) {
+    return transcript.formattedEnglishText
+      || transcript.formattedText
+      || transcript.englishText
+      || transcript.text
+      || transcript.formattedOriginalText
+      || transcript.originalText
+      || null;
+  }
+
+  return transcript.englishText
+    || transcript.text
+    || transcript.originalText
+    || null;
+}
+
+function getTranscriptForLanguage(transcript, language = 'English', formatted = true) {
+  const normalizedLanguage = normalizeLanguageName(language)?.toLowerCase();
+  const shouldPreferOriginal =
+    normalizedLanguage &&
+    normalizedLanguage !== 'english' &&
+    hasDistinctOriginalTranscript(transcript);
+
+  return getTranscriptText(transcript, shouldPreferOriginal ? 'original' : 'english', formatted);
+}
+
+async function formatTranscriptVariants(transcript, originalLanguage = 'English') {
+  if (!transcript) {
+    return transcript;
+  }
+
+  const englishText = transcript.englishText || transcript.text || null;
+  const originalText = transcript.originalText || englishText;
+  const normalizedOriginalLanguage = normalizeLanguageName(originalLanguage || transcript.originalLanguage || transcript.language || 'English');
+
+  if (englishText) {
+    try {
+      transcript.formattedEnglishText = await formatTranscript(englishText, 'English');
+    } catch (error) {
+      transcript.formattedEnglishText = englishText;
+    }
+  }
+
+  if (originalText) {
+    if (originalText === englishText) {
+      transcript.formattedOriginalText = transcript.formattedEnglishText || originalText;
+    } else {
+      try {
+        transcript.formattedOriginalText = await formatTranscript(originalText, normalizedOriginalLanguage || 'English');
+      } catch (error) {
+        transcript.formattedOriginalText = originalText;
+      }
+    }
+  }
+
+  transcript.formattedText = transcript.formattedEnglishText || transcript.formattedOriginalText || englishText || originalText;
+  transcript.text = englishText || originalText;
+  transcript.englishText = englishText || originalText;
+  transcript.originalText = originalText;
+  transcript.originalLanguage = transcript.originalLanguage || normalizedOriginalLanguage || transcript.language || 'English';
+
+  return transcript;
+}
+
 function ensureTranscriptionConfigured() {
   if (config.azureOpenAI.whisperEndpoint && (config.azureOpenAI.whisperKey || config.azureOpenAI.apiKey)) {
     return 'WHISPER_ENDPOINT';
@@ -510,7 +614,7 @@ router.post('/detect-scenes', async (req, res) => {
             
             if (transcript && transcript.text && transcript.text.trim()) {
               scene.transcript = transcript;
-              console.log(`  ✓ Scene ${scene.sceneId}: "${transcript.text.substring(0, 50)}..."`);
+              console.log(`  ✓ Scene ${scene.sceneId}: "${(transcript.originalText || transcript.text).substring(0, 50)}..."`);
             } else {
               console.log(`  - Scene ${scene.sceneId}: No speech detected`);
             }
@@ -534,19 +638,8 @@ router.post('/detect-scenes', async (req, res) => {
             const scene = scenes[i];
             
             if (scene.transcript && scene.transcript.text) {
-              try {
-                const formattedText = await formatTranscript(
-                  scene.transcript.text,
-                  targetLang
-                );
-                
-                scene.transcript.formattedText = formattedText;
-                console.log(`  ✓ Scene ${scene.sceneId}: Formatted`);
-              } catch (error) {
-                console.error(`  ✗ Failed to format scene ${scene.sceneId}:`, error.message);
-                // Keep original text if formatting fails
-                scene.transcript.formattedText = scene.transcript.text;
-              }
+              await formatTranscriptVariants(scene.transcript, targetLang);
+              console.log(`  ✓ Scene ${scene.sceneId}: Formatted`);
             }
           }
           
@@ -608,7 +701,7 @@ router.post('/detect-scenes', async (req, res) => {
           
           if (scene.description) {
             try {
-              const dialogue = scene.transcript?.formattedText || scene.transcript?.text || null;
+              const dialogue = getTranscriptForLanguage(scene.transcript, targetLanguage, true);
               const title = await generateSceneTitle(
                 scene.description,
                 dialogue,
@@ -874,6 +967,11 @@ router.get('/scenes/:videoId', (req, res) => {
 
     const sceneData = JSON.parse(fs.readFileSync(scenesPath, 'utf8'));
     const reprocessInProgress = Boolean(getReprocessJobs()[videoId]?.status === 'running');
+    const hasOriginalTranscript = sceneData.scenes.some(scene => hasDistinctOriginalTranscript(scene.transcript));
+    const normalizedSceneLanguage = normalizeLanguageName(sceneData.language);
+    const originalTranscriptLabel = normalizedSceneLanguage && normalizedSceneLanguage !== 'English'
+      ? normalizedSceneLanguage
+      : 'Original';
     
     // Determine video path based on videoId type
     // Articles: article-* → /api/articles/:id.mp4
@@ -1121,6 +1219,28 @@ router.get('/scenes/:videoId', (req, res) => {
       color: #1d9bf0;
       font-style: italic;
     }
+    .transcript-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .transcript-toggle-btn {
+      background: transparent;
+      border: 1px solid #2f3336;
+      color: #e7e9ea;
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.85em;
+    }
+    .transcript-toggle-btn.active {
+      background: #10b981;
+      border-color: #10b981;
+      color: #0f1419;
+      font-weight: 700;
+    }
     .transcript-label {
       font-weight: bold;
       color: #10b981;
@@ -1146,8 +1266,8 @@ router.get('/scenes/:videoId', (req, res) => {
 <body>
   <div class="header">
     <a href="${backLink}" class="back-link">← ${videoId.startsWith('article-') ? 'Back' : 'My Videos'}</a>
-    <h1>🎬 ${sceneData.title || 'Scene Viewer'}</h1>
-    <p style="font-size: 0.9em; color: #71767b;">Video ID: ${videoId}</p>
+    <h1>🎬 ${escapeHtml(sceneData.title || 'Scene Viewer')}</h1>
+    <p style="font-size: 0.9em; color: #71767b;">Video ID: ${escapeHtml(videoId)}</p>
     ${!videoId.startsWith('article-') ? `
       <p class="created-with">Created with <a href="https://reels.hurated.com/analyze">reels.hurated.com/analyze</a></p>
     ` : ''}
@@ -1155,7 +1275,7 @@ router.get('/scenes/:videoId', (req, res) => {
 
   <div class="container">
     <div class="video-player">
-      <h2>📹 ${sceneData.title || 'Video Playback'}</h2>
+      <h2>📹 ${escapeHtml(sceneData.title || 'Video Playback')}</h2>
       <video id="videoPlayer" controls autoplay muted preload="metadata">
         <source src="/${videoPath}" type="video/mp4">
         Your browser does not support the video tag.
@@ -1185,20 +1305,28 @@ router.get('/scenes/:videoId', (req, res) => {
         </div>
         ` : ''}
       </div>
+      ${sceneData.scenes.some(s => s.transcript) ? `
+      <div class="transcript-toolbar">
+        <span style="font-size: 0.85em; color: #71767b;">Transcript view:</span>
+        <button id="englishTranscriptBtn" class="transcript-toggle-btn active" type="button">English</button>
+        ${hasOriginalTranscript ? `<button id="originalTranscriptBtn" class="transcript-toggle-btn" type="button">${escapeHtml(originalTranscriptLabel)}</button>` : ''}
+      </div>
+      ` : ''}
     </div>
 
     <div class="scenes-grid">
       ${sceneData.scenes.map(scene => {
-        const transcriptText = typeof scene.transcript === 'string'
-          ? scene.transcript
-          : (scene.transcript?.formattedText || scene.transcript?.text || '');
-        const transcriptHtml = transcriptText
-          ? transcriptText
+        const englishTranscriptText = getTranscriptText(scene.transcript, 'english', true) || '';
+        const originalTranscriptText = getTranscriptText(scene.transcript, 'original', true) || englishTranscriptText;
+        const toTranscriptHtml = (text) => text
+          ? escapeHtml(text)
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/\n\n/g, '</p><p style="margin: 12px 0;">')
             .replace(/^(.+)$/m, '<p style="margin: 12px 0;">$1</p>')
           : '';
+        const englishTranscriptHtml = toTranscriptHtml(englishTranscriptText);
+        const originalTranscriptHtml = toTranscriptHtml(originalTranscriptText);
         const transcriptDuration = typeof scene.transcript === 'object' && typeof scene.transcript?.duration === 'number'
           ? scene.transcript.duration.toFixed(1)
           : null;
@@ -1207,7 +1335,7 @@ router.get('/scenes/:videoId', (req, res) => {
         <div class="scene" id="scene-${scene.sceneId}">
           <div class="scene-header">
             <div>
-              <span class="scene-title">${scene.title || `Scene ${scene.sceneId}`}</span>
+              <span class="scene-title">${escapeHtml(scene.title || `Scene ${scene.sceneId}`)}</span>
               <span class="scene-duration">(${scene.duration}s)</span>
             </div>
             <div class="scene-time" onclick="seekTo(${scene.start})">
@@ -1232,15 +1360,18 @@ router.get('/scenes/:videoId', (req, res) => {
 
           ${scene.description ? `
             <div class="description">
-              <strong>🎬 Visual:</strong> ${scene.description}
+              <strong>🎬 Visual:</strong> ${escapeHtml(scene.description)}
             </div>
           ` : ''}
           
           ${scene.transcript ? `
             <div class="description" style="border-left-color: #10b981; background: rgba(16, 185, 129, 0.05);">
               <strong>🎙️ Dialogue:</strong>
-              <div style="margin-top: 12px; line-height: 1.8; white-space: pre-wrap;">
-                ${transcriptHtml}
+              <div class="transcript-body transcript-english" style="margin-top: 12px; line-height: 1.8; white-space: pre-wrap;">
+                ${englishTranscriptHtml}
+              </div>
+              <div class="transcript-body transcript-original" style="margin-top: 12px; line-height: 1.8; white-space: pre-wrap; display: none;">
+                ${originalTranscriptHtml}
               </div>
               ${transcriptDuration ? `
               <div style="margin-top: 12px; font-size: 0.85em; color: #999;">
@@ -1273,6 +1404,44 @@ router.get('/scenes/:videoId', (req, res) => {
       video.currentTime = time;
       video.play();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    const englishTranscriptBtn = document.getElementById('englishTranscriptBtn');
+    const originalTranscriptBtn = document.getElementById('originalTranscriptBtn');
+    function setTranscriptMode(mode) {
+      document.querySelectorAll('.transcript-english').forEach(el => {
+        el.style.display = mode === 'english' ? 'block' : 'none';
+      });
+      document.querySelectorAll('.transcript-original').forEach(el => {
+        el.style.display = mode === 'original' ? 'block' : 'none';
+      });
+      if (englishTranscriptBtn) {
+        englishTranscriptBtn.classList.toggle('active', mode === 'english');
+      }
+      if (originalTranscriptBtn) {
+        originalTranscriptBtn.classList.toggle('active', mode === 'original');
+      }
+      try {
+        localStorage.setItem('sceneTranscriptMode', mode);
+      } catch (error) {
+      }
+    }
+    if (englishTranscriptBtn) {
+      englishTranscriptBtn.addEventListener('click', () => setTranscriptMode('english'));
+    }
+    if (originalTranscriptBtn) {
+      originalTranscriptBtn.addEventListener('click', () => setTranscriptMode('original'));
+    }
+    if (englishTranscriptBtn || originalTranscriptBtn) {
+      let initialTranscriptMode = 'english';
+      try {
+        const savedTranscriptMode = localStorage.getItem('sceneTranscriptMode');
+        if (savedTranscriptMode === 'original' && originalTranscriptBtn) {
+          initialTranscriptMode = 'original';
+        }
+      } catch (error) {
+      }
+      setTranscriptMode(initialTranscriptMode);
     }
 
 	    // Reprocess button handler
@@ -2374,12 +2543,12 @@ async function runReprocessJob(videoId) {
         null
       );
       
-        if (transcript && transcript.text && transcript.text.trim()) {
-          scene.transcript = transcript;
-          if (!targetLanguage) {
-            targetLanguage = normalizeLanguageName(transcript.language) || detectLanguageFromText(transcript.text);
-          }
+      if (transcript && transcript.text && transcript.text.trim()) {
+        scene.transcript = transcript;
+        if (!targetLanguage) {
+          targetLanguage = normalizeLanguageName(transcript.originalLanguage || transcript.language) || detectLanguageFromText(transcript.originalText || transcript.text);
         }
+      }
       } catch (error) {
         if (error.code === 'AZURE_TRANSCRIPTION_CONFIG_ERROR') {
           throw error;
@@ -2389,8 +2558,9 @@ async function runReprocessJob(videoId) {
     }
 
   if (!targetLanguage) {
-    const firstTranscript = scenes.find(scene => scene.transcript?.text)?.transcript?.text;
-    targetLanguage = firstTranscript ? detectLanguageFromText(firstTranscript) : 'English';
+    const firstTranscript = scenes.find(scene => scene.transcript?.originalText || scene.transcript?.text)?.transcript;
+    const firstTranscriptText = firstTranscript?.originalText || firstTranscript?.text;
+    targetLanguage = firstTranscriptText ? detectLanguageFromText(firstTranscriptText) : 'English';
   }
 
   if (scenes.some(scene => scene.transcript?.text)) {
@@ -2400,14 +2570,7 @@ async function runReprocessJob(videoId) {
         continue;
       }
 
-      try {
-        scene.transcript.formattedText = await formatTranscript(
-          scene.transcript.text,
-          targetLanguage
-        );
-      } catch (error) {
-        scene.transcript.formattedText = scene.transcript.text;
-      }
+      await formatTranscriptVariants(scene.transcript, targetLanguage);
     }
   }
 
@@ -2418,7 +2581,7 @@ async function runReprocessJob(videoId) {
       try {
         scene.title = await generateSceneTitle(
           scene.description,
-          scene.transcript?.formattedText || scene.transcript?.text || null,
+          getTranscriptForLanguage(scene.transcript, targetLanguage, true),
           targetLanguage
         );
       } catch (titleError) {
