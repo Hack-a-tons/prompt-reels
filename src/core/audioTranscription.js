@@ -203,15 +203,17 @@ const transcribeAudio = async (audioPath, targetLanguage = null) => {
         }
         
         // Handle no speech detected
-        if (error.response?.status === 400 && error.response?.data?.includes('no speech')) {
+        const errorData = error.response?.data;
+        const errorText = typeof errorData === 'string'
+          ? errorData
+          : JSON.stringify(errorData || {});
+        if (error.response?.status === 400 && errorText.toLowerCase().includes('no speech')) {
           return null;
         }
         
         // Other errors
         const status = error.response?.status;
-        const errorBody = typeof error.response?.data === 'string'
-          ? error.response.data
-          : JSON.stringify(error.response?.data || {});
+        const errorBody = errorText;
         if (status === 404 || status === 401 || status === 403) {
           const fatalError = new Error(
             `Azure transcription request failed with ${status} for deployment "${whisperDeploymentName}". ` +
