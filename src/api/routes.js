@@ -9,7 +9,12 @@ const { processVideo } = require('../core/videoProcessor');
 const { describeImage, describeScene, generateSceneTitle, generateVideoTitle, formatTranscript } = require('../core/gemini');
 const { loadPrompts, runFPOIteration } = require('../core/promptOptimizer');
 const { logVideoAnalysis } = require('../core/weave');
-const { detectScenes, extractSceneFrames } = require('../core/sceneDetection');
+const {
+  detectScenes,
+  extractSceneFrames,
+  normalizeDetectionOptions,
+  normalizeFrameExtractionOptions,
+} = require('../core/sceneDetection');
 const { transcribeSceneAudio, getWhisperDeploymentName } = require('../core/audioTranscription');
 const { fetchNewsArticle } = require('../core/newsFetcher');
 const {
@@ -482,7 +487,18 @@ router.post('/analyze', async (req, res) => {
  */
 router.post('/detect-scenes', async (req, res) => {
   try {
-    const { videoId, threshold = 0.4, extractFrames = false, describeScenes = false, transcribeAudio = false, language = null } = req.body;
+    const {
+      videoId,
+      threshold = 0.4,
+      extractFrames = false,
+      describeScenes = false,
+      transcribeAudio = false,
+      language = null,
+      splitMode = 'cut',
+      motionThreshold = undefined,
+      minSceneDuration = undefined,
+      frameFps = null,
+    } = req.body;
     
     if (!videoId) {
       return res.status(400).json({ error: 'videoId is required' });
@@ -497,10 +513,21 @@ router.post('/detect-scenes', async (req, res) => {
     }
 
     const videoPath = path.join(config.uploadDir, videoFiles[0]);
+    const detectionOptions = normalizeDetectionOptions({
+      threshold,
+      splitMode,
+      motionThreshold,
+      minSceneDuration,
+    });
+    const frameExtractionOptions = normalizeFrameExtractionOptions({
+      frameFps,
+    });
+    const shouldExtractFrames = extractFrames || describeScenes;
     
     // Start timing
     const timings = {
       start: Date.now(),
+      setup: 0,
       sceneDetection: 0,
       frameExtraction: 0,
       transcription: 0,
@@ -515,7 +542,8 @@ router.post('/detect-scenes', async (req, res) => {
     console.log(`\n🎬 Scene detection for: ${videoId}`);
     sendProgress(videoId, '🎬 Detecting scenes...', 10);
     const sceneDetectStart = Date.now();
-    let scenes = await detectScenes(videoPath, threshold);
+    timings.setup = sceneDetectStart - timings.start;
+    let scenes = await detectScenes(videoPath, detectionOptions);
     timings.sceneDetection = Date.now() - sceneDetectStart;
     console.log(`✓ Detected ${scenes.length} scenes (${(timings.sceneDetection / 1000).toFixed(1)}s)\n`);
     sendProgress(videoId, `✓ Detected ${scenes.length} scenes`, 20);
@@ -524,10 +552,10 @@ router.post('/detect-scenes', async (req, res) => {
     let detectedLanguage = language;
     
     // Optionally extract frames
-    if (extractFrames) {
+    if (shouldExtractFrames) {
       const frameExtractStart = Date.now();
       const framesDir = path.join(config.outputDir, `${videoId}_scenes`);
-      scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+      scenes = await extractSceneFrames(videoPath, scenes, framesDir, frameExtractionOptions);
       timings.frameExtraction = Date.now() - frameExtractStart;
       console.log(`✓ Frame extraction complete (${(timings.frameExtraction / 1000).toFixed(1)}s)\n`);
       
@@ -744,7 +772,14 @@ router.post('/detect-scenes', async (req, res) => {
       videoId,
       title: videoTitle,
       sceneCount: scenes.length,
-      threshold,
+      threshold: detectionOptions.threshold,
+      splitMode: detectionOptions.splitMode,
+      motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
+      minSceneDuration: detectionOptions.minSceneDuration,
+      frameSampling: {
+        strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
+        fps: frameExtractionOptions.frameFps,
+      },
       timestamp: new Date().toISOString(),
       language: detectedLanguage || 'English',
       scenes: scenes.map(scene => ({
@@ -754,6 +789,7 @@ router.post('/detect-scenes', async (req, res) => {
         end: scene.end,
         duration: scene.end - scene.start,
         frames: scene.frames || [],
+        frameSampling: scene.frameSampling || null,
         description: scene.description || null,
         transcript: scene.transcript || null,
       })),
@@ -773,7 +809,7 @@ router.post('/detect-scenes', async (req, res) => {
     console.log(`Video: ${videoTitle}`);
     console.log(`ID: ${videoId}`);
     console.log(`${'─'.repeat(60)}`);
-    console.log(`Upload & Setup:        ${(timings.upload - timings.start) / 1000}s`);
+    console.log(`Upload & Setup:        ${(timings.setup / 1000).toFixed(1)}s`);
     console.log(`Scene Detection:       ${(timings.sceneDetection / 1000).toFixed(1)}s`);
     if (timings.frameExtraction > 0) {
       console.log(`Frame Extraction:      ${(timings.frameExtraction / 1000).toFixed(1)}s`);
@@ -803,13 +839,27 @@ router.post('/detect-scenes', async (req, res) => {
       videoId,
       title: videoTitle,
       sceneCount: scenes.length,
-      threshold,
+      threshold: detectionOptions.threshold,
+      splitMode: detectionOptions.splitMode,
+      motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
+      minSceneDuration: detectionOptions.minSceneDuration,
+      frameSampling: {
+        strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
+        fps: frameExtractionOptions.frameFps,
+      },
       scenesFile: `${videoId}_scenes.json`,
       processingTime: timings.total / 1000,
     });
   } catch (error) {
     console.error('Scene detection error:', error);
-    res.status(500).json({ error: error.message });
+    const statusCode = (
+      error.message.includes('splitMode') ||
+      error.message.includes('threshold') ||
+      error.message.includes('sceneDuration') ||
+      error.message.includes('frameFps') ||
+      error.message.includes('framesPerScene')
+    ) ? 400 : 500;
+    res.status(statusCode).json({ error: error.message });
   }
 });
 
@@ -2488,10 +2538,18 @@ async function runReprocessJob(videoId) {
   let existingSceneData = {};
   let scenes = [];
   let threshold = 0.4;
+  let splitMode = 'cut';
+  let motionThreshold = null;
+  let minSceneDuration = null;
+  let frameFps = null;
 
   if (fs.existsSync(outputPath)) {
     existingSceneData = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
     threshold = typeof existingSceneData.threshold === 'number' ? existingSceneData.threshold : threshold;
+    splitMode = typeof existingSceneData.splitMode === 'string' ? existingSceneData.splitMode : splitMode;
+    motionThreshold = typeof existingSceneData.motionThreshold === 'number' ? existingSceneData.motionThreshold : motionThreshold;
+    minSceneDuration = typeof existingSceneData.minSceneDuration === 'number' ? existingSceneData.minSceneDuration : minSceneDuration;
+    frameFps = typeof existingSceneData.frameSampling?.fps === 'number' ? existingSceneData.frameSampling.fps : frameFps;
     scenes = Array.isArray(existingSceneData.scenes)
       ? existingSceneData.scenes.map((scene, index) => ({
           ...scene,
@@ -2506,11 +2564,21 @@ async function runReprocessJob(videoId) {
       : [];
   }
 
+  const detectionOptions = normalizeDetectionOptions({
+    threshold,
+    splitMode,
+    motionThreshold,
+    minSceneDuration,
+  });
+  const frameExtractionOptions = normalizeFrameExtractionOptions({
+    frameFps,
+  });
+
   sendProgress(videoId, '🔄 Re-processing video...', 5);
 
   if (scenes.length === 0) {
     sendProgress(videoId, '🎬 Detecting scenes...', 15);
-    scenes = await detectScenes(videoPath, threshold);
+    scenes = await detectScenes(videoPath, detectionOptions);
     sendProgress(videoId, `✓ Detected ${scenes.length} scenes`, 25);
   } else {
     sendProgress(videoId, `✓ Loaded ${scenes.length} existing scenes`, 25);
@@ -2520,7 +2588,7 @@ async function runReprocessJob(videoId) {
   const shouldExtractFrames = scenes.some(scene => !Array.isArray(scene.frames) || scene.frames.length === 0);
   if (shouldExtractFrames) {
     sendProgress(videoId, '📸 Extracting frames...', 35);
-    scenes = await extractSceneFrames(videoPath, scenes, framesDir);
+    scenes = await extractSceneFrames(videoPath, scenes, framesDir, frameExtractionOptions);
   } else {
     sendProgress(videoId, '✓ Reusing existing frames', 35);
   }
@@ -2599,7 +2667,14 @@ async function runReprocessJob(videoId) {
     videoId,
     title: existingSceneData.title || 'Untitled Video',
     sceneCount: scenes.length,
-    threshold,
+    threshold: detectionOptions.threshold,
+    splitMode: detectionOptions.splitMode,
+    motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
+    minSceneDuration: detectionOptions.minSceneDuration,
+    frameSampling: {
+      strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
+      fps: frameExtractionOptions.frameFps,
+    },
     language: targetLanguage || existingSceneData.language || 'English',
     scenes: scenes.map(scene => ({
       ...scene,
@@ -2610,6 +2685,7 @@ async function runReprocessJob(videoId) {
       description: scene.description || null,
       transcript: scene.transcript || null,
       frames: Array.isArray(scene.frames) ? scene.frames : [],
+      frameSampling: scene.frameSampling || null,
     })),
     timestamp: new Date().toISOString(),
   };

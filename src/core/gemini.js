@@ -127,15 +127,24 @@ const describeScene = async (framePaths, sceneId, start, end, languageInstructio
       return buffer.toString('base64');
     });
 
-    let prompt = `Analyze these ${frameData.length} frames from Scene ${sceneId} (${start.toFixed(1)}s - ${end.toFixed(1)}s) of a video. 
-The frames show the beginning, middle, and end of this scene.
+    const sequenceHint = frameData.length === 1
+      ? 'This frame is a representative still from the scene.'
+      : frameData.length <= 3
+        ? 'The frames are representative keyframes from earlier, middle, and later in the scene.'
+        : 'The frames are ordered chronologically and sample the scene across time, including motion within a continuous shot.';
 
-Provide a clear, concise title (1-2 sentences maximum) that captures what happens in this scene. Focus on:
-- Main actions or events
-- Key subjects or objects
-- Scene setting or context
+    let prompt = `Analyze these ${frameData.length} video frames from Scene ${sceneId} (${start.toFixed(1)}s - ${end.toFixed(1)}s).
+${sequenceHint}
 
-Do NOT start with phrases like "In this scene" or "This scene shows". Just describe what's happening directly, as a title would.`;
+Write a concise visual description in 2-4 sentences. Focus on:
+- Main subjects, setting, and visible action
+- How the action develops from early frames to later frames
+- Character movement, camera movement, and any important positional changes
+- Details that explain transitions, momentum, or the direction of movement
+
+If the visuals stay mostly continuous, say that clearly instead of inventing cuts.
+Do NOT mention frame numbers.
+Do NOT start with phrases like "In this scene" or "This scene shows".`;
 
     // Add language instruction if provided
     if (languageInstruction) {

@@ -92,13 +92,26 @@ Core commands:
   upload FILE
   download-video URL
   analyze VIDEO_ID [--prompt-id ID]
-  detect-scenes VIDEO_ID [--threshold N] [--extract-frames] [--describe-scenes] [--transcribe-audio] [--language NAME]
+  detect-scenes VIDEO_ID [SCENE_OPTIONS]
+  describe-video VIDEO_ID [SCENE_OPTIONS]
   prompts
   results VIDEO_ID
   scenes-json VIDEO_ID
   scenes-html VIDEO_ID [--output FILE]
   reprocess VIDEO_ID
   progress VIDEO_ID
+
+Scene analysis options:
+  --threshold N              Hard-cut threshold (0.0-1.0]
+  --split-mode MODE          cut | motion | hybrid
+                            Hybrid defaults: motion-threshold 0.12, min-scene-duration 1.0
+  --motion-threshold N       Sensitivity for motion-aware splitting
+  --min-scene-duration SEC   Merge boundaries closer than this duration
+  --fps N, --frame-fps N     Sample at least N frames per second within each scene
+  --extract-frames           Extract representative frames
+  --describe-scenes          Generate descriptions for each scene
+  --transcribe-audio         Transcribe scene audio when available
+  --language NAME            Force output language
 
 Article commands:
   fetch-news [--query TEXT]
@@ -124,6 +137,7 @@ Generic fallback:
 Examples:
   ./reels.sh upload ./clip.mp4
   ./reels.sh detect-scenes <VIDEO_ID> --extract-frames --describe-scenes --transcribe-audio --language English
+  ./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --motion-threshold 0.12 --fps 4 --language English
   ./reels.sh -v fetch-news --query "technology news video"
   ./reels.sh article-describe <ARTICLE_ID> --threshold 0.3
   ./reels.sh request GET /api/thumbnails/<ARTICLE_ID>.mp4 --output article-thumb.mp4
@@ -409,19 +423,52 @@ cmd_analyze() {
   json_request POST /api/analyze "$body" "analyze"
 }
 
-cmd_detect_scenes() {
+cmd_detect_scenes_common() {
+  local command_name="$1"
+  local force_describe="$2"
+  shift 2
+
   local video_id=""
   local threshold=""
+  local split_mode=""
+  local motion_threshold=""
+  local min_scene_duration=""
+  local frame_fps=""
   local language=""
   local extract_frames=0
   local describe_scenes=0
   local transcribe_audio=0
+
+  if [[ "$force_describe" == "1" ]]; then
+    extract_frames=1
+    describe_scenes=1
+  fi
 
   while (($#)); do
     case "$1" in
       --threshold)
         [[ $# -ge 2 ]] || die "--threshold requires a numeric value"
         threshold="$2"
+        shift 2
+        ;;
+      --split-mode)
+        [[ $# -ge 2 ]] || die "--split-mode requires a value"
+        split_mode="$2"
+        shift 2
+        ;;
+      --motion-threshold)
+        [[ $# -ge 2 ]] || die "--motion-threshold requires a numeric value"
+        motion_threshold="$2"
+        shift 2
+        ;;
+      --min-scene-duration)
+        [[ $# -ge 2 ]] || die "--min-scene-duration requires a numeric value"
+        min_scene_duration="$2"
+        shift 2
+        ;;
+      --fps|--frame-fps)
+        [[ $# -ge 2 ]] || die "$1 requires a numeric value"
+        frame_fps="$2"
         shift 2
         ;;
       --extract-frames)
@@ -442,29 +489,49 @@ cmd_detect_scenes() {
         shift 2
         ;;
       -*)
-        die "Unknown option for detect-scenes: $1"
+        die "Unknown option for $command_name: $1"
         ;;
       *)
-        [[ -z "$video_id" ]] || die "detect-scenes accepts only one VIDEO_ID"
+        [[ -z "$video_id" ]] || die "$command_name accepts only one VIDEO_ID"
         video_id="$1"
         shift
         ;;
     esac
   done
 
-  [[ -n "$video_id" ]] || die "detect-scenes requires VIDEO_ID"
+  [[ -n "$video_id" ]] || die "$command_name requires VIDEO_ID"
+
+  if (( describe_scenes )); then
+    extract_frames=1
+  fi
 
   local has_threshold=0
+  local has_split_mode=0
+  local has_motion_threshold=0
+  local has_min_scene_duration=0
+  local has_frame_fps=0
   local has_language=0
   [[ -n "$threshold" ]] && has_threshold=1
+  [[ -n "$split_mode" ]] && has_split_mode=1
+  [[ -n "$motion_threshold" ]] && has_motion_threshold=1
+  [[ -n "$min_scene_duration" ]] && has_min_scene_duration=1
+  [[ -n "$frame_fps" ]] && has_frame_fps=1
   [[ -n "$language" ]] && has_language=1
 
   local body
   body="$(jq -n \
     --arg videoId "$video_id" \
     --arg threshold "$threshold" \
+    --arg splitMode "$split_mode" \
+    --arg motionThreshold "$motion_threshold" \
+    --arg minSceneDuration "$min_scene_duration" \
+    --arg frameFps "$frame_fps" \
     --arg language "$language" \
     --argjson hasThreshold "$(json_bool "$has_threshold")" \
+    --argjson hasSplitMode "$(json_bool "$has_split_mode")" \
+    --argjson hasMotionThreshold "$(json_bool "$has_motion_threshold")" \
+    --argjson hasMinSceneDuration "$(json_bool "$has_min_scene_duration")" \
+    --argjson hasFrameFps "$(json_bool "$has_frame_fps")" \
     --argjson hasLanguage "$(json_bool "$has_language")" \
     --argjson extractFrames "$(json_bool "$extract_frames")" \
     --argjson describeScenes "$(json_bool "$describe_scenes")" \
@@ -472,6 +539,10 @@ cmd_detect_scenes() {
     '
       {videoId: $videoId}
       + (if $hasThreshold then {threshold: ($threshold | tonumber)} else {} end)
+      + (if $hasSplitMode then {splitMode: $splitMode} else {} end)
+      + (if $hasMotionThreshold then {motionThreshold: ($motionThreshold | tonumber)} else {} end)
+      + (if $hasMinSceneDuration then {minSceneDuration: ($minSceneDuration | tonumber)} else {} end)
+      + (if $hasFrameFps then {frameFps: ($frameFps | tonumber)} else {} end)
       + (if $extractFrames then {extractFrames: true} else {} end)
       + (if $describeScenes then {describeScenes: true} else {} end)
       + (if $transcribeAudio then {transcribeAudio: true} else {} end)
@@ -479,7 +550,15 @@ cmd_detect_scenes() {
     '
   )"
 
-  json_request POST /api/detect-scenes "$body" "detect-scenes"
+  json_request POST /api/detect-scenes "$body" "$command_name"
+}
+
+cmd_detect_scenes() {
+  cmd_detect_scenes_common "detect-scenes" 0 "$@"
+}
+
+cmd_describe_video() {
+  cmd_detect_scenes_common "describe-video" 1 "$@"
 }
 
 cmd_prompts() {
@@ -948,6 +1027,9 @@ case "$COMMAND" in
     ;;
   detect-scenes)
     cmd_detect_scenes "$@"
+    ;;
+  describe-video)
+    cmd_describe_video "$@"
     ;;
   prompts)
     cmd_prompts "$@"
