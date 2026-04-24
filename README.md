@@ -685,6 +685,102 @@ See `nginx.conf.example` for full configuration. The main domain `reels.hurated.
 
 ---
 
+## 🖥️ CLI Usage (`reels.sh`)
+
+`reels.sh` is the main command-line wrapper for the API. It supports local video files, direct video URLs, scene detection, scene descriptions, transcripts, article workflows, FPO endpoints, and raw API requests.
+
+### Configure the CLI
+
+`reels.sh` always loads `.env` from the real path of the script itself, so it works even when the script is called through a symlink. It will fail if `.env` is missing.
+
+```bash
+cp .env.example .env
+# Edit .env and set at least:
+#   API_BASE_URL=https://reels.hurated.com
+#   AI / transcription credentials
+
+./reels.sh --help
+```
+
+Notes:
+- `API_BASE_URL` is required in `.env` unless you pass `--base-url URL`
+- `-v` / `--verbose` can be placed anywhere and prints full `curl` requests and full responses
+- Legacy helper scripts in `scripts/` still exist, but `reels.sh` is the supported all-in-one CLI
+
+### Recommended workflow: upload and describe a video
+
+1. Upload a local file:
+
+```bash
+./reels.sh upload ./clip.mp4
+```
+
+The response includes a `videoId`. Use that ID for the next commands.
+
+2. Run the recommended scene workflow:
+
+```bash
+./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
+```
+
+What this does:
+- detects scenes
+- extracts frames for each scene
+- samples at least `4` frames per second within each detected scene
+- generates visual descriptions for each scene
+- generates scene titles and an overall video title
+
+Hybrid mode defaults:
+- `motionThreshold=0.12`
+- `minSceneDuration=1.0`
+
+3. Fetch the saved scene analysis:
+
+```bash
+./reels.sh scenes-json <VIDEO_ID>
+./reels.sh scenes-html <VIDEO_ID> --output scene-viewer.html
+```
+
+`scenes-json` returns the saved structured output from `output/<VIDEO_ID>_scenes.json`. `scenes-html` saves the browser viewer page for the same analysis.
+
+### Process a video directly from a URL
+
+If you already have a direct MP4 URL, you can ingest it without downloading it yourself first:
+
+```bash
+./reels.sh download-video https://example.com/video.mp4
+./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
+```
+
+### Lower-level scene command
+
+`describe-video` is the recommended one-step command for scene descriptions. `detect-scenes` is the lower-level version when you want more explicit control.
+
+```bash
+./reels.sh detect-scenes <VIDEO_ID> --split-mode cut
+./reels.sh detect-scenes <VIDEO_ID> --split-mode hybrid --extract-frames --describe-scenes --transcribe-audio --fps 2 --language English
+```
+
+Useful options:
+- `--split-mode cut|motion|hybrid`
+- `--motion-threshold N` to make hybrid or motion splitting more or less sensitive
+- `--min-scene-duration SEC` to suppress tiny scene fragments
+- `--fps N` / `--frame-fps N` to sample long continuous shots more densely
+- `--transcribe-audio` to add Whisper transcripts to each scene when transcription is configured
+
+### Original whole-video analysis
+
+The repo also keeps the older full-video analysis endpoint, which is separate from scene-by-scene descriptions:
+
+```bash
+./reels.sh analyze <VIDEO_ID>
+./reels.sh results <VIDEO_ID>
+```
+
+Use this when you want the original prompt-driven video analysis output in `output/<VIDEO_ID>_descriptions.json`.
+
+---
+
 ## 📡 API Endpoints
 
 ### Health Check
@@ -732,58 +828,55 @@ Response: Analysis results JSON
 POST /api/detect-scenes
 Content-Type: application/json
 Body: { 
-  videoId,               // Required: Video ID from upload
-  threshold: 0.4,        // Optional: Scene change sensitivity (0.0-1.0)
-  extractFrames: false,  // Optional: Extract 3 frames per scene
-  describeScenes: false  // Optional: Generate AI descriptions
+  videoId,                   // Required: Video ID from upload
+  threshold: 0.4,            // Optional: Hard-cut sensitivity (0.0-1.0)
+  splitMode: "cut",          // Optional: cut | motion | hybrid
+  motionThreshold: 0.12,     // Optional: Motion-aware split sensitivity
+  minSceneDuration: 1.0,     // Optional: Merge tiny fragments
+  frameFps: 4,               // Optional: Minimum frame sampling density
+  extractFrames: false,      // Optional: Extract frames for each scene
+  describeScenes: false,     // Optional: Generate scene descriptions
+  transcribeAudio: false,    // Optional: Transcribe audio per scene
+  language: "English"        // Optional: Force output language
 }
 Response: { 
   success, 
   videoId, 
+  title,
   sceneCount, 
-  scenes: [
-    {
-      sceneId, 
-      start,      // Start time in seconds
-      end,        // End time in seconds
-      duration,   // Scene duration
-      frames: []  // If extractFrames=true
-    }
-  ],
-  outputPath 
+  threshold,
+  splitMode,
+  motionThreshold,
+  minSceneDuration,
+  frameSampling: {
+    strategy,              // keyframes | fps
+    fps
+  },
+  scenesFile,
+  processingTime
 }
+```
 
-# Two-step workflow
+**CLI equivalents:**
 
-# Step 1: Detect scene timestamps (fast)
-./scripts/detect-scenes.sh video-1234567890           # Timestamps only
-./scripts/detect-scenes.sh -t 0.3 video-1234567890    # Custom threshold
+```bash
+# Recommended one-step workflow
+./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
 
-# Step 2: Extract frames + generate AI descriptions (slower)
-./scripts/describe-scenes.sh video-1234567890         # Frames + descriptions
+# Lower-level explicit version
+./reels.sh detect-scenes <VIDEO_ID> --split-mode hybrid --extract-frames --describe-scenes --fps 4 --language English
 
-# Complete workflow
-./scripts/upload.sh video.mp4                         # 1. Upload → get VIDEO_ID
-./scripts/detect-scenes.sh <VIDEO_ID>                 # 2. Detect scenes (fast)
-./scripts/describe-scenes.sh <VIDEO_ID>               # 3. Extract + describe (AI)
+# Fast timestamps-only detection
+./reels.sh detect-scenes <VIDEO_ID> --split-mode cut
 ```
 
 **How it works:**
 
-**detect-scenes.sh** (Fast - timestamps only):
-- Uses ffmpeg's scene detection filter (no file splitting!)
-- Analyzes frame differences to detect cuts/transitions
-- Lower threshold (0.2-0.3): More sensitive, detects subtle changes
-- Higher threshold (0.5-0.6): Less sensitive, only major scene changes
-- Default (0.4): Good balance for most videos
-- **Output:** JSON with scene timestamps (start, end, duration)
-
-**describe-scenes.sh** (Slower - frames + AI):
-- Extracts 3 frames per scene (beginning/middle/end)
-- **Generates AI descriptions** based on the 3 frames
-- Uses Azure OpenAI or Gemini to analyze scene content
-- Descriptions saved in JSON and displayed in viewer
-- Can specify threshold (re-detects scenes if needed)
+- `cut` mode: keeps the classic full-change scene detection
+- `motion` mode: uses motion-sensitive boundaries for moving shots
+- `hybrid` mode: combines both and is the recommended default for reels
+- `--fps N` is useful for continuous shots where characters or camera move without a full cut
+- saved results are written to `output/<VIDEO_ID>_scenes.json` and can be viewed at `/api/scenes/<VIDEO_ID>` or `/api/scenes/<VIDEO_ID>/json`
 
 ### Fetch News Article
 ```bash
