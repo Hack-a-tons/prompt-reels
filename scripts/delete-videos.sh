@@ -274,14 +274,14 @@ for FILE in "${FILES_TO_DELETE[@]}"; do
         else
             echo -e "  ${GREEN}✓${NC} Deleted file: $FILE"
         fi
-        ((DELETED_COUNT++))
+        ((DELETED_COUNT += 1))
     else
         if [ "$IS_DIR" = true ]; then
             echo -e "  ${RED}✗${NC} Failed to delete directory: $FILE"
         else
             echo -e "  ${RED}✗${NC} Failed to delete file: $FILE"
         fi
-        ((FAILED_COUNT++))
+        ((FAILED_COUNT += 1))
     fi
 done
 
