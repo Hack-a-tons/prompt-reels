@@ -103,10 +103,14 @@ Core commands:
 
 Scene analysis options:
   --threshold N              Hard-cut threshold (0.0-1.0]
-  --split-mode MODE          cut | motion | hybrid
+  --split-mode MODE          cut | motion | visual | hybrid (default: hybrid)
                             Hybrid defaults: motion-threshold 0.12, min-scene-duration 1.0
   --motion-threshold N       Sensitivity for motion-aware splitting
   --min-scene-duration SEC   Merge boundaries closer than this duration
+  --visual-threshold N       Visual-window score floor for gradual transitions
+  --visual-sample-fps N      Frames per second for visual-window detection
+  --visual-window SEC        Seconds before/after each visual boundary candidate
+  --visual-min-gap SEC       Minimum spacing between visual-window boundaries
   --fps N, --frame-fps N     Sample at least N frames per second within each scene
   --extract-frames           Extract representative frames
   --describe-scenes          Generate descriptions for each scene
@@ -137,7 +141,7 @@ Generic fallback:
 Examples:
   ./reels.sh upload ./clip.mp4
   ./reels.sh detect-scenes <VIDEO_ID> --extract-frames --describe-scenes --transcribe-audio --language English
-  ./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --motion-threshold 0.12 --fps 4 --language English
+  ./reels.sh describe-video <VIDEO_ID> --fps 4 --language English
   ./reels.sh -v fetch-news --query "technology news video"
   ./reels.sh article-describe <ARTICLE_ID> --threshold 0.3
   ./reels.sh request GET /api/thumbnails/<ARTICLE_ID>.mp4 --output article-thumb.mp4
@@ -433,6 +437,10 @@ cmd_detect_scenes_common() {
   local split_mode=""
   local motion_threshold=""
   local min_scene_duration=""
+  local visual_threshold=""
+  local visual_sample_fps=""
+  local visual_window_seconds=""
+  local visual_min_boundary_spacing=""
   local frame_fps=""
   local language=""
   local extract_frames=0
@@ -464,6 +472,26 @@ cmd_detect_scenes_common() {
       --min-scene-duration)
         [[ $# -ge 2 ]] || die "--min-scene-duration requires a numeric value"
         min_scene_duration="$2"
+        shift 2
+        ;;
+      --visual-threshold)
+        [[ $# -ge 2 ]] || die "--visual-threshold requires a numeric value"
+        visual_threshold="$2"
+        shift 2
+        ;;
+      --visual-sample-fps)
+        [[ $# -ge 2 ]] || die "--visual-sample-fps requires a numeric value"
+        visual_sample_fps="$2"
+        shift 2
+        ;;
+      --visual-window)
+        [[ $# -ge 2 ]] || die "--visual-window requires a numeric value"
+        visual_window_seconds="$2"
+        shift 2
+        ;;
+      --visual-min-gap)
+        [[ $# -ge 2 ]] || die "--visual-min-gap requires a numeric value"
+        visual_min_boundary_spacing="$2"
         shift 2
         ;;
       --fps|--frame-fps)
@@ -509,12 +537,20 @@ cmd_detect_scenes_common() {
   local has_split_mode=0
   local has_motion_threshold=0
   local has_min_scene_duration=0
+  local has_visual_threshold=0
+  local has_visual_sample_fps=0
+  local has_visual_window_seconds=0
+  local has_visual_min_boundary_spacing=0
   local has_frame_fps=0
   local has_language=0
   [[ -n "$threshold" ]] && has_threshold=1
   [[ -n "$split_mode" ]] && has_split_mode=1
   [[ -n "$motion_threshold" ]] && has_motion_threshold=1
   [[ -n "$min_scene_duration" ]] && has_min_scene_duration=1
+  [[ -n "$visual_threshold" ]] && has_visual_threshold=1
+  [[ -n "$visual_sample_fps" ]] && has_visual_sample_fps=1
+  [[ -n "$visual_window_seconds" ]] && has_visual_window_seconds=1
+  [[ -n "$visual_min_boundary_spacing" ]] && has_visual_min_boundary_spacing=1
   [[ -n "$frame_fps" ]] && has_frame_fps=1
   [[ -n "$language" ]] && has_language=1
 
@@ -525,12 +561,20 @@ cmd_detect_scenes_common() {
     --arg splitMode "$split_mode" \
     --arg motionThreshold "$motion_threshold" \
     --arg minSceneDuration "$min_scene_duration" \
+    --arg visualThreshold "$visual_threshold" \
+    --arg visualSampleFps "$visual_sample_fps" \
+    --arg visualWindowSeconds "$visual_window_seconds" \
+    --arg visualMinBoundarySpacing "$visual_min_boundary_spacing" \
     --arg frameFps "$frame_fps" \
     --arg language "$language" \
     --argjson hasThreshold "$(json_bool "$has_threshold")" \
     --argjson hasSplitMode "$(json_bool "$has_split_mode")" \
     --argjson hasMotionThreshold "$(json_bool "$has_motion_threshold")" \
     --argjson hasMinSceneDuration "$(json_bool "$has_min_scene_duration")" \
+    --argjson hasVisualThreshold "$(json_bool "$has_visual_threshold")" \
+    --argjson hasVisualSampleFps "$(json_bool "$has_visual_sample_fps")" \
+    --argjson hasVisualWindowSeconds "$(json_bool "$has_visual_window_seconds")" \
+    --argjson hasVisualMinBoundarySpacing "$(json_bool "$has_visual_min_boundary_spacing")" \
     --argjson hasFrameFps "$(json_bool "$has_frame_fps")" \
     --argjson hasLanguage "$(json_bool "$has_language")" \
     --argjson extractFrames "$(json_bool "$extract_frames")" \
@@ -542,6 +586,10 @@ cmd_detect_scenes_common() {
       + (if $hasSplitMode then {splitMode: $splitMode} else {} end)
       + (if $hasMotionThreshold then {motionThreshold: ($motionThreshold | tonumber)} else {} end)
       + (if $hasMinSceneDuration then {minSceneDuration: ($minSceneDuration | tonumber)} else {} end)
+      + (if $hasVisualThreshold then {visualThreshold: ($visualThreshold | tonumber)} else {} end)
+      + (if $hasVisualSampleFps then {visualSampleFps: ($visualSampleFps | tonumber)} else {} end)
+      + (if $hasVisualWindowSeconds then {visualWindowSeconds: ($visualWindowSeconds | tonumber)} else {} end)
+      + (if $hasVisualMinBoundarySpacing then {visualMinBoundarySpacing: ($visualMinBoundarySpacing | tonumber)} else {} end)
       + (if $hasFrameFps then {frameFps: ($frameFps | tonumber)} else {} end)
       + (if $extractFrames then {extractFrames: true} else {} end)
       + (if $describeScenes then {describeScenes: true} else {} end)

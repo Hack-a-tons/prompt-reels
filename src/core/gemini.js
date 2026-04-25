@@ -138,6 +138,7 @@ ${sequenceHint}
 
 Write a concise visual description in 2-4 sentences. Focus on:
 - Main subjects, setting, and visible action
+- Concrete subject names when visually clear, such as vehicle type, landmark type, animal, role, era, or environment
 - How the action develops from early frames to later frames
 - Character movement, camera movement, and any important positional changes
 - Details that explain transitions, momentum, or the direction of movement

@@ -2,11 +2,18 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+const DEFAULT_SPLIT_MODE = 'hybrid';
 const DEFAULT_THRESHOLD = 0.4;
 const DEFAULT_MOTION_THRESHOLD = 0.12;
 const DEFAULT_MOTION_MIN_SCENE_DURATION = 1.0;
+const DEFAULT_VISUAL_THRESHOLD = 0.9;
+const DEFAULT_VISUAL_SAMPLE_FPS = 1;
+const DEFAULT_VISUAL_WINDOW_SECONDS = 3;
+const DEFAULT_VISUAL_MIN_BOUNDARY_SPACING = 4.5;
+const VISUAL_FRAME_WIDTH = 64;
+const VISUAL_FRAME_HEIGHT = 36;
 const DEFAULT_MIN_FRAMES_PER_SCENE = 3;
-const SUPPORTED_SPLIT_MODES = new Set(['cut', 'motion', 'hybrid']);
+const SUPPORTED_SPLIT_MODES = new Set(['cut', 'motion', 'visual', 'hybrid']);
 
 const roundTimestamp = (value) => parseFloat(value.toFixed(3));
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -64,9 +71,9 @@ const parsePositiveInteger = (value, fallback, label) => {
 };
 
 const normalizeSplitMode = (value) => {
-  const splitMode = typeof value === 'string' ? value.trim().toLowerCase() : 'cut';
+  const splitMode = typeof value === 'string' ? value.trim().toLowerCase() : DEFAULT_SPLIT_MODE;
   if (!SUPPORTED_SPLIT_MODES.has(splitMode)) {
-    throw new Error(`Unsupported splitMode "${value}". Supported modes: cut, motion, hybrid`);
+    throw new Error(`Unsupported splitMode "${value}". Supported modes: cut, motion, visual, hybrid`);
   }
   return splitMode;
 };
@@ -88,12 +95,36 @@ const normalizeDetectionOptions = (optionsOrThreshold = DEFAULT_THRESHOLD) => {
     splitMode === 'cut' ? 0 : DEFAULT_MOTION_MIN_SCENE_DURATION,
     'minSceneDuration'
   );
+  const visualThreshold = parsePositiveNumber(
+    options.visualThreshold,
+    DEFAULT_VISUAL_THRESHOLD,
+    'visualThreshold'
+  );
+  const visualSampleFps = parsePositiveNumber(
+    options.visualSampleFps,
+    DEFAULT_VISUAL_SAMPLE_FPS,
+    'visualSampleFps'
+  );
+  const visualWindowSeconds = parsePositiveNumber(
+    options.visualWindowSeconds,
+    DEFAULT_VISUAL_WINDOW_SECONDS,
+    'visualWindowSeconds'
+  );
+  const visualMinBoundarySpacing = parsePositiveNumber(
+    options.visualMinBoundarySpacing,
+    DEFAULT_VISUAL_MIN_BOUNDARY_SPACING,
+    'visualMinBoundarySpacing'
+  );
 
   return {
     threshold,
     splitMode,
     motionThreshold,
     minSceneDuration,
+    visualThreshold,
+    visualSampleFps,
+    visualWindowSeconds,
+    visualMinBoundarySpacing,
   };
 };
 
@@ -216,7 +247,8 @@ const buildFpsTimestamps = (start, end, frameFps, minFramesPerScene) => {
  * splitMode:
  * - cut: existing hard-cut behavior
  * - motion: lower-threshold visual change detection for movement-heavy shots
- * - hybrid: combine hard cuts and motion-sensitive boundaries
+ * - visual: sampled-frame window comparison for gradual transitions
+ * - hybrid: combine hard cuts, motion-sensitive boundaries, and visual-window changes
  *
  * @param {string} videoPath - Path to video file
  * @param {number|Object} optionsOrThreshold - Threshold or detailed options
@@ -236,6 +268,11 @@ const detectScenes = async (videoPath, optionsOrThreshold = DEFAULT_THRESHOLD) =
     console.log(`   Motion threshold: ${options.motionThreshold}`);
     console.log(`   Min scene duration: ${options.minSceneDuration}s`);
   }
+  if (options.splitMode === 'visual' || options.splitMode === 'hybrid') {
+    console.log(`   Visual threshold: ${options.visualThreshold}`);
+    console.log(`   Visual sample FPS: ${options.visualSampleFps}`);
+    console.log(`   Visual window: ${options.visualWindowSeconds}s`);
+  }
 
   const duration = await getVideoDuration(videoPath);
   console.log(`   Duration: ${duration.toFixed(2)}s`);
@@ -247,17 +284,22 @@ const detectScenes = async (videoPath, optionsOrThreshold = DEFAULT_THRESHOLD) =
   } else if (options.splitMode === 'motion') {
     sceneTimestamps = await runSceneDetection(videoPath, options.motionThreshold);
     sceneTimestamps = consolidateSceneTimestamps(sceneTimestamps, duration, options.minSceneDuration);
+  } else if (options.splitMode === 'visual') {
+    sceneTimestamps = await runVisualSceneDetection(videoPath, duration, options);
+    sceneTimestamps = consolidateSceneTimestamps(sceneTimestamps, duration, options.minSceneDuration);
   } else {
-    const [cutTimestamps, motionTimestamps] = await Promise.all([
+    const [cutTimestamps, motionTimestamps, visualTimestamps] = await Promise.all([
       runSceneDetection(videoPath, options.threshold),
       runSceneDetection(videoPath, options.motionThreshold),
+      runVisualSceneDetection(videoPath, duration, options),
     ]);
 
     console.log(`   Hard-cut boundaries: ${cutTimestamps.length}`);
     console.log(`   Motion-sensitive boundaries: ${motionTimestamps.length}`);
+    console.log(`   Visual-window boundaries: ${visualTimestamps.length}`);
 
     sceneTimestamps = consolidateSceneTimestamps(
-      [...cutTimestamps, ...motionTimestamps],
+      [...cutTimestamps, ...motionTimestamps, ...visualTimestamps],
       duration,
       options.minSceneDuration
     );
@@ -269,6 +311,198 @@ const detectScenes = async (videoPath, optionsOrThreshold = DEFAULT_THRESHOLD) =
   console.log(`   ✓ Created ${scenes.length} scene segments`);
 
   return scenes;
+};
+
+const runVisualSceneDetection = async (videoPath, duration, options) => {
+  const frames = await extractVisualFeatures(videoPath, options.visualSampleFps);
+  const windowFrames = Math.max(1, Math.round(options.visualWindowSeconds * options.visualSampleFps));
+
+  if (frames.length < windowFrames * 2 + 1) {
+    console.log(`   Visual-window analysis skipped: only ${frames.length} sampled frames`);
+    return [];
+  }
+
+  const scores = buildVisualWindowScores(frames, options.visualSampleFps, windowFrames);
+  const scoreThreshold = getVisualScoreThreshold(scores, options.visualThreshold);
+  const candidates = findVisualBoundaryCandidates(scores, scoreThreshold, duration, options.minSceneDuration);
+  const selected = selectSpacedVisualBoundaries(candidates, options.visualMinBoundarySpacing);
+
+  console.log(`   Visual-window sampled frames: ${frames.length}`);
+  console.log(`   Visual-window score threshold: ${scoreThreshold.toFixed(3)}`);
+  console.log(`   Visual-window candidates: ${candidates.length}`);
+
+  return selected.map(candidate => candidate.timestamp);
+};
+
+const extractVisualFeatures = (videoPath, sampleFps) => {
+  return new Promise((resolve, reject) => {
+    const width = VISUAL_FRAME_WIDTH;
+    const height = VISUAL_FRAME_HEIGHT;
+    const frameSize = width * height * 3;
+    const ffmpeg = spawn('ffmpeg', [
+      '-v', 'error',
+      '-i', videoPath,
+      '-vf', `fps=${sampleFps},scale=${width}:${height}`,
+      '-f', 'rawvideo',
+      '-pix_fmt', 'rgb24',
+      '-',
+    ]);
+
+    const chunks = [];
+    let stderr = '';
+
+    ffmpeg.stdout.on('data', (chunk) => {
+      chunks.push(chunk);
+    });
+
+    ffmpeg.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ffmpeg.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffmpeg visual analysis exited with code ${code}: ${stderr}`));
+        return;
+      }
+
+      const buffer = Buffer.concat(chunks);
+      const frames = [];
+      for (let offset = 0; offset + frameSize <= buffer.length; offset += frameSize) {
+        frames.push(extractVisualFrameFeature(buffer, offset, width, height));
+      }
+
+      resolve(frames);
+    });
+
+    ffmpeg.on('error', (error) => {
+      reject(error);
+    });
+  });
+};
+
+const extractVisualFrameFeature = (buffer, offset, width, height) => {
+  const histogram = new Array(64).fill(0);
+  const cellsX = 4;
+  const cellsY = 3;
+  const cellSums = Array.from({ length: cellsX * cellsY }, () => [0, 0, 0, 0]);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const pixelOffset = offset + (y * width + x) * 3;
+      const red = buffer[pixelOffset];
+      const green = buffer[pixelOffset + 1];
+      const blue = buffer[pixelOffset + 2];
+
+      histogram[(red >> 6) * 16 + (green >> 6) * 4 + (blue >> 6)]++;
+
+      const cellX = Math.min(cellsX - 1, Math.floor(x / (width / cellsX)));
+      const cellY = Math.min(cellsY - 1, Math.floor(y / (height / cellsY)));
+      const cell = cellSums[cellY * cellsX + cellX];
+      cell[0] += red;
+      cell[1] += green;
+      cell[2] += blue;
+      cell[3]++;
+    }
+  }
+
+  const totalPixels = width * height;
+  const feature = histogram.map(value => value / totalPixels);
+
+  for (const [red, green, blue, count] of cellSums) {
+    feature.push(red / count / 255);
+    feature.push(green / count / 255);
+    feature.push(blue / count / 255);
+  }
+
+  return feature;
+};
+
+const buildVisualWindowScores = (frames, sampleFps, windowFrames) => {
+  const scores = [];
+
+  for (let index = windowFrames; index < frames.length - windowFrames; index++) {
+    const before = meanFeature(frames, index - windowFrames, index);
+    const after = meanFeature(frames, index, index + windowFrames);
+    scores.push({
+      timestamp: index / sampleFps,
+      score: featureDistance(before, after),
+    });
+  }
+
+  return scores;
+};
+
+const meanFeature = (features, start, end) => {
+  const count = end - start;
+  const mean = new Array(features[0].length).fill(0);
+
+  for (let index = start; index < end; index++) {
+    for (let featureIndex = 0; featureIndex < mean.length; featureIndex++) {
+      mean[featureIndex] += features[index][featureIndex] / count;
+    }
+  }
+
+  return mean;
+};
+
+const featureDistance = (left, right) => {
+  let sum = 0;
+
+  for (let index = 0; index < left.length; index++) {
+    const diff = left[index] - right[index];
+    sum += diff * diff;
+  }
+
+  return Math.sqrt(sum);
+};
+
+const getVisualScoreThreshold = (scores, floor) => {
+  if (scores.length === 0) {
+    return floor;
+  }
+
+  const values = scores.map(score => score.score).sort((left, right) => left - right);
+  const median = values[Math.floor(values.length / 2)] || 0;
+  const deviations = values
+    .map(value => Math.abs(value - median))
+    .sort((left, right) => left - right);
+  const mad = deviations[Math.floor(deviations.length / 2)] || 0;
+
+  return Math.max(floor, median + mad * 0.75);
+};
+
+const findVisualBoundaryCandidates = (scores, threshold, duration, minSceneDuration) => {
+  const candidates = [];
+
+  for (let index = 0; index < scores.length; index++) {
+    const previous = index > 0 ? scores[index - 1].score : -Infinity;
+    const next = index < scores.length - 1 ? scores[index + 1].score : -Infinity;
+    const current = scores[index];
+
+    if (
+      current.score >= threshold &&
+      current.score >= previous &&
+      current.score >= next &&
+      current.timestamp >= minSceneDuration - 0.0001 &&
+      duration - current.timestamp >= minSceneDuration - 0.0001
+    ) {
+      candidates.push(current);
+    }
+  }
+
+  return candidates;
+};
+
+const selectSpacedVisualBoundaries = (candidates, minBoundarySpacing) => {
+  const selected = [];
+
+  for (const candidate of [...candidates].sort((left, right) => right.score - left.score)) {
+    if (selected.every(existing => Math.abs(existing.timestamp - candidate.timestamp) >= minBoundarySpacing)) {
+      selected.push(candidate);
+    }
+  }
+
+  return selected.sort((left, right) => left.timestamp - right.timestamp);
 };
 
 /**

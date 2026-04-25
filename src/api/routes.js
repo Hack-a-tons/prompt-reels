@@ -494,9 +494,13 @@ router.post('/detect-scenes', async (req, res) => {
       describeScenes = false,
       transcribeAudio = false,
       language = null,
-      splitMode = 'cut',
+      splitMode = undefined,
       motionThreshold = undefined,
       minSceneDuration = undefined,
+      visualThreshold = undefined,
+      visualSampleFps = undefined,
+      visualWindowSeconds = undefined,
+      visualMinBoundarySpacing = undefined,
       frameFps = null,
     } = req.body;
     
@@ -518,6 +522,10 @@ router.post('/detect-scenes', async (req, res) => {
       splitMode,
       motionThreshold,
       minSceneDuration,
+      visualThreshold,
+      visualSampleFps,
+      visualWindowSeconds,
+      visualMinBoundarySpacing,
     });
     const frameExtractionOptions = normalizeFrameExtractionOptions({
       frameFps,
@@ -776,6 +784,10 @@ router.post('/detect-scenes', async (req, res) => {
       splitMode: detectionOptions.splitMode,
       motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
       minSceneDuration: detectionOptions.minSceneDuration,
+      visualThreshold: detectionOptions.visualThreshold,
+      visualSampleFps: detectionOptions.visualSampleFps,
+      visualWindowSeconds: detectionOptions.visualWindowSeconds,
+      visualMinBoundarySpacing: detectionOptions.visualMinBoundarySpacing,
       frameSampling: {
         strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
         fps: frameExtractionOptions.frameFps,
@@ -843,6 +855,10 @@ router.post('/detect-scenes', async (req, res) => {
       splitMode: detectionOptions.splitMode,
       motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
       minSceneDuration: detectionOptions.minSceneDuration,
+      visualThreshold: detectionOptions.visualThreshold,
+      visualSampleFps: detectionOptions.visualSampleFps,
+      visualWindowSeconds: detectionOptions.visualWindowSeconds,
+      visualMinBoundarySpacing: detectionOptions.visualMinBoundarySpacing,
       frameSampling: {
         strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
         fps: frameExtractionOptions.frameFps,
@@ -856,6 +872,7 @@ router.post('/detect-scenes', async (req, res) => {
       error.message.includes('splitMode') ||
       error.message.includes('threshold') ||
       error.message.includes('sceneDuration') ||
+      error.message.includes('visual') ||
       error.message.includes('frameFps') ||
       error.message.includes('framesPerScene')
     ) ? 400 : 500;
@@ -2538,9 +2555,13 @@ async function runReprocessJob(videoId) {
   let existingSceneData = {};
   let scenes = [];
   let threshold = 0.4;
-  let splitMode = 'cut';
+  let splitMode = undefined;
   let motionThreshold = null;
   let minSceneDuration = null;
+  let visualThreshold = null;
+  let visualSampleFps = null;
+  let visualWindowSeconds = null;
+  let visualMinBoundarySpacing = null;
   let frameFps = null;
 
   if (fs.existsSync(outputPath)) {
@@ -2549,6 +2570,10 @@ async function runReprocessJob(videoId) {
     splitMode = typeof existingSceneData.splitMode === 'string' ? existingSceneData.splitMode : splitMode;
     motionThreshold = typeof existingSceneData.motionThreshold === 'number' ? existingSceneData.motionThreshold : motionThreshold;
     minSceneDuration = typeof existingSceneData.minSceneDuration === 'number' ? existingSceneData.minSceneDuration : minSceneDuration;
+    visualThreshold = typeof existingSceneData.visualThreshold === 'number' ? existingSceneData.visualThreshold : visualThreshold;
+    visualSampleFps = typeof existingSceneData.visualSampleFps === 'number' ? existingSceneData.visualSampleFps : visualSampleFps;
+    visualWindowSeconds = typeof existingSceneData.visualWindowSeconds === 'number' ? existingSceneData.visualWindowSeconds : visualWindowSeconds;
+    visualMinBoundarySpacing = typeof existingSceneData.visualMinBoundarySpacing === 'number' ? existingSceneData.visualMinBoundarySpacing : visualMinBoundarySpacing;
     frameFps = typeof existingSceneData.frameSampling?.fps === 'number' ? existingSceneData.frameSampling.fps : frameFps;
     scenes = Array.isArray(existingSceneData.scenes)
       ? existingSceneData.scenes.map((scene, index) => ({
@@ -2569,6 +2594,10 @@ async function runReprocessJob(videoId) {
     splitMode,
     motionThreshold,
     minSceneDuration,
+    visualThreshold,
+    visualSampleFps,
+    visualWindowSeconds,
+    visualMinBoundarySpacing,
   });
   const frameExtractionOptions = normalizeFrameExtractionOptions({
     frameFps,
@@ -2671,6 +2700,10 @@ async function runReprocessJob(videoId) {
     splitMode: detectionOptions.splitMode,
     motionThreshold: detectionOptions.splitMode === 'cut' ? null : detectionOptions.motionThreshold,
     minSceneDuration: detectionOptions.minSceneDuration,
+    visualThreshold: detectionOptions.visualThreshold,
+    visualSampleFps: detectionOptions.visualSampleFps,
+    visualWindowSeconds: detectionOptions.visualWindowSeconds,
+    visualMinBoundarySpacing: detectionOptions.visualMinBoundarySpacing,
     frameSampling: {
       strategy: frameExtractionOptions.frameFps ? 'fps' : 'keyframes',
       fps: frameExtractionOptions.frameFps,

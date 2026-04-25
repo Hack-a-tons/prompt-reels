@@ -720,7 +720,7 @@ The response includes a `videoId`. Use that ID for the next commands.
 2. Run the recommended scene workflow:
 
 ```bash
-./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
+./reels.sh describe-video <VIDEO_ID> --fps 4 --language English
 ```
 
 What this does:
@@ -733,6 +733,7 @@ What this does:
 Hybrid mode defaults:
 - `motionThreshold=0.12`
 - `minSceneDuration=1.0`
+- visual-window scene detection for gradual transitions is enabled
 
 3. Fetch the saved scene analysis:
 
@@ -749,7 +750,7 @@ If you already have a direct MP4 URL, you can ingest it without downloading it y
 
 ```bash
 ./reels.sh download-video https://example.com/video.mp4
-./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
+./reels.sh describe-video <VIDEO_ID> --fps 4 --language English
 ```
 
 ### Lower-level scene command
@@ -762,9 +763,10 @@ If you already have a direct MP4 URL, you can ingest it without downloading it y
 ```
 
 Useful options:
-- `--split-mode cut|motion|hybrid`
+- `--split-mode cut|motion|visual|hybrid`
 - `--motion-threshold N` to make hybrid or motion splitting more or less sensitive
 - `--min-scene-duration SEC` to suppress tiny scene fragments
+- `--visual-threshold N`, `--visual-sample-fps N`, `--visual-window SEC`, and `--visual-min-gap SEC` to tune gradual-transition detection
 - `--fps N` / `--frame-fps N` to sample long continuous shots more densely
 - `--transcribe-audio` to add Whisper transcripts to each scene when transcription is configured
 
@@ -830,9 +832,12 @@ Content-Type: application/json
 Body: { 
   videoId,                   // Required: Video ID from upload
   threshold: 0.4,            // Optional: Hard-cut sensitivity (0.0-1.0)
-  splitMode: "cut",          // Optional: cut | motion | hybrid
+  splitMode: "hybrid",       // Optional: cut | motion | visual | hybrid
   motionThreshold: 0.12,     // Optional: Motion-aware split sensitivity
   minSceneDuration: 1.0,     // Optional: Merge tiny fragments
+  visualThreshold: 0.9,      // Optional: Visual-window score floor
+  visualSampleFps: 1,        // Optional: FPS for gradual-transition detection
+  visualWindowSeconds: 3,    // Optional: Seconds before/after visual candidates
   frameFps: 4,               // Optional: Minimum frame sampling density
   extractFrames: false,      // Optional: Extract frames for each scene
   describeScenes: false,     // Optional: Generate scene descriptions
@@ -861,7 +866,7 @@ Response: {
 
 ```bash
 # Recommended one-step workflow
-./reels.sh describe-video <VIDEO_ID> --split-mode hybrid --fps 4 --language English
+./reels.sh describe-video <VIDEO_ID> --fps 4 --language English
 
 # Lower-level explicit version
 ./reels.sh detect-scenes <VIDEO_ID> --split-mode hybrid --extract-frames --describe-scenes --fps 4 --language English
@@ -874,7 +879,8 @@ Response: {
 
 - `cut` mode: keeps the classic full-change scene detection
 - `motion` mode: uses motion-sensitive boundaries for moving shots
-- `hybrid` mode: combines both and is the recommended default for reels
+- `visual` mode: compares sampled frame windows to catch gradual montage transitions
+- `hybrid` mode: combines cut, motion, and visual-window detection and is the default for reels
 - `--fps N` is useful for continuous shots where characters or camera move without a full cut
 - saved results are written to `output/<VIDEO_ID>_scenes.json` and can be viewed at `/api/scenes/<VIDEO_ID>` or `/api/scenes/<VIDEO_ID>/json`
 
